@@ -18,7 +18,6 @@ $action = (string)($_POST['action'] ?? '');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
-        require_csrf($config);
         if ($action === 'login') {
             $last = (int)($_SESSION['last_login_attempt'] ?? 0);
             $failures = (int)($_SESSION['login_failures'] ?? 0);
@@ -33,6 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['login_failures'] = 0;
             header('Location: index.php'); exit;
         }
+        require_csrf($config);
         if (empty($_SESSION['auth'])) throw new RuntimeException('Zaloguj się ponownie.');
         if ($action === 'logout') {
             $_SESSION = [];
