@@ -2,9 +2,10 @@
 declare(strict_types=1);
 require_once __DIR__ . '/valuation_core.php';
 
-function market_listing_summary(PDO $db, float $area, ?int $rooms = null, string $excludeUrl = ''): array {
+function market_listing_summary(PDO $db, float $area, ?int $rooms = null, string $excludeUrl = '', ?int $excludePrice = null, ?float $excludeArea = null): array {
     $empty = ['available'=>false, 'count'=>0, 'median'=>null, 'low'=>null, 'high'=>null, 'examples'=>[],
-        'price_m2'=>null, 'scope'=>'Oferty z Kwidzyna · metraż ±20%' . ($rooms ? ' · ' . $rooms . ' pok.' : ''),
+        'price_m2'=>null, 'indicative_median'=>null, 'probable_duplicates'=>0,
+        'scope'=>'Oferty z Kwidzyna · metraż ±20%' . ($rooms ? ' · ' . $rooms . ' pok.' : ''),
         'reason'=>'too_few'];
     if ($area < 15 || $area > 250) return $empty;
     $since = gmdate('Y-m-d H:i:s', strtotime('-30 days'));
@@ -16,6 +17,13 @@ function market_listing_summary(PDO $db, float $area, ?int $rooms = null, string
     $values = []; $seen = []; $examples = [];
     foreach ($query->fetchAll(PDO::FETCH_ASSOC) as $row) {
         if ($row['url'] === $excludeUrl) continue;
+        // The same flat can appear under another portal URL. An exact price and near-identical
+        // area are a conservative duplicate signal when valuing a known listing.
+        if ($excludeUrl !== '' && $excludePrice !== null && $excludeArea !== null
+            && (int)$row['price'] === $excludePrice && abs((float)$row['area'] - $excludeArea) <= .1) {
+            ++$empty['probable_duplicates'];
+            continue;
+        }
         $signature = (int)$row['price'] . '|' . round((float)$row['area'], 1) . '|' . (int)$row['rooms'] . '|' . valuation_street((string)$row['street']);
         if (isset($seen[$signature])) continue;
         $seen[$signature] = true;
@@ -28,8 +36,9 @@ function market_listing_summary(PDO $db, float $area, ?int $rooms = null, string
         abs((float)$a['area'] - $area) <=> abs((float)$b['area'] - $area)
         ?: strcmp((string)$b['last_seen'], (string)$a['last_seen']));
     $empty['examples'] = array_slice($examples, 0, 8);
-    if (count($values) < 5) return $empty;
     $money = static fn(float $p): int => (int)(round($p * $area / 1000) * 1000);
+    if (count($values) >= 2) $empty['indicative_median'] = $money(valuation_percentile($values, .5));
+    if (count($values) < 5) return $empty;
     return array_merge($empty, ['available'=>true, 'reason'=>'',
         'low'=>$money(valuation_percentile($values, .2)),
         'median'=>$money(valuation_percentile($values, .5)),
@@ -37,9 +46,9 @@ function market_listing_summary(PDO $db, float $area, ?int $rooms = null, string
         'price_m2'=>(int)round(valuation_percentile($values, .5))]);
 }
 
-function market_valuation(PDO $db, float $area, string $street, ?int $rooms = null, string $condition = 'dobry', string $excludeUrl = '', bool $withCityFallback = false): array {
+function market_valuation(PDO $db, float $area, string $street, ?int $rooms = null, string $condition = 'dobry', string $excludeUrl = '', bool $withCityFallback = false, ?int $excludePrice = null, ?float $excludeArea = null): array {
     $rcn = valuation_summary($db, $area, $street);
-    $listings = market_listing_summary($db, $area, $rooms, $excludeUrl);
+    $listings = market_listing_summary($db, $area, $rooms, $excludeUrl, $excludePrice, $excludeArea);
     $rcnCity = $withCityFallback && !$rcn['available'] ? valuation_city_summary($db, $area) : null;
     // The source data do not identify condition consistently. Never infer a condition discount.
     $rcnValue = $rcn['available'] ? $rcn['median'] : null;
@@ -73,6 +82,8 @@ function market_display_reference(array $market): array {
         'label'=>'Wstępny punkt RCN · Kwidzyn', 'note'=>'Całe miasto; wpisz ulicę dla dokładniejszego porównania'];
     if ($market['listing_value'] !== null) return ['value'=>$market['listing_value'],
         'label'=>'Orientacyjna mediana ogłoszeń', 'note'=>'Ceny ofertowe, bez potwierdzenia transakcjami RCN'];
+    if ($market['listings']['indicative_median'] !== null) return ['value'=>$market['listings']['indicative_median'],
+        'label'=>'Wstępny punkt ofertowy', 'note'=>'Mała próba; tylko ceny z ogłoszeń'];
     return ['value'=>null, 'label'=>'Za mało danych do wyceny',
         'note'=>'Sprawdź ulicę i porównywalne oferty'];
 }
