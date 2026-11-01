@@ -84,6 +84,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $logged = !empty($_SESSION['auth']);
+if ($logged && !isset($_GET['analyze']) && isset($_GET['add_url']) && !isset($_GET['add_price'])) {
+    $legacyUrl = (string)$_GET['add_url'];
+    $stmt = db()->prepare('SELECT 1 FROM discoveries WHERE url = ?');
+    $stmt->execute([$legacyUrl]);
+    if ($stmt->fetchColumn()) {
+        header('Location: index.php?analyze=' . rawurlencode($legacyUrl) . '#analysis');
+        exit;
+    }
+}
 $edit = null;
 $listings = [];
 $discoveries = [];
