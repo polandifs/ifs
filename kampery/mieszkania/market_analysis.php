@@ -8,7 +8,7 @@ function market_listing_summary(PDO $db, float $area, ?int $rooms = null, string
         'reason'=>'too_few'];
     if ($area < 15 || $area > 250) return $empty;
     $since = gmdate('Y-m-d H:i:s', strtotime('-30 days'));
-    $sql = "SELECT url,source,title,price,area,rooms,street,last_seen FROM homes WHERE source<>'Adradar' AND price BETWEEN 50000 AND 2000000 AND area BETWEEN ? AND ? AND last_seen>=?";
+    $sql = "SELECT url,source,title,price,area,rooms,street,last_seen FROM homes WHERE source NOT IN ('Adradar','Facebook') AND price BETWEEN 50000 AND 2000000 AND area BETWEEN ? AND ? AND last_seen>=?";
     $params = [$area * 0.8, $area * 1.2, $since];
     if ($rooms !== null && $rooms > 0) { $sql .= ' AND rooms=?'; $params[] = $rooms; }
     $query = $db->prepare($sql);
