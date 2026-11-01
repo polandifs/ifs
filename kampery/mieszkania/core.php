@@ -17,6 +17,7 @@ function homes_db(): PDO {
     $db->exec("CREATE TABLE IF NOT EXISTS alerts (id INTEGER PRIMARY KEY, title TEXT NOT NULL, url TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)");
     $db->exec("CREATE TABLE IF NOT EXISTS price_history (id INTEGER PRIMARY KEY, url TEXT NOT NULL, old_price INTEGER NOT NULL, new_price INTEGER NOT NULL, changed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)");
     $db->exec("CREATE INDEX IF NOT EXISTS price_history_url ON price_history(url)");
+    $db->exec("CREATE TABLE IF NOT EXISTS watched (url TEXT PRIMARY KEY, saved_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, purchase_cost INTEGER NOT NULL DEFAULT 0, renovation INTEGER NOT NULL DEFAULT 0, reserve_cost INTEGER NOT NULL DEFAULT 0, resale_target INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '')");
     return $db;
 }
 
