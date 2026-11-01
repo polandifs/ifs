@@ -43,16 +43,19 @@ function market_valuation(PDO $db, float $area, string $street, ?int $rooms = nu
     if ($rcnValue !== null && $listingValue !== null) {
         $jointLow = max($rcn['low'], $listings['low']);
         $jointHigh = min($rcn['high'], $listings['high']);
-        // Disjoint distributions cannot support a single price or negotiation target.
-        $basis = $jointLow <= $jointHigh ? 'both' : 'conflict';
+        // A narrow overlap with far-apart medians is weak corroboration.
+        $narrowOverlap = $jointLow <= $jointHigh
+            && ($jointHigh - $jointLow) < .1 * min($rcnValue, $listingValue)
+            && abs($rcnValue - $listingValue) > .15 * max($rcnValue, $listingValue);
+        $basis = $jointLow > $jointHigh ? 'conflict' : ($narrowOverlap ? 'divergent' : 'both');
         $estimate = $basis === 'both' ? $rcnValue : null;
     } elseif ($rcnValue !== null) { $basis = 'rcn'; }
     elseif ($listingValue !== null) { $basis = 'listings'; }
     return ['rcn'=>$rcn, 'listings'=>$listings, 'rcn_value'=>$rcnValue,
         'listing_value'=>$listingValue, 'estimate'=>$estimate, 'basis'=>$basis,
-        'joint_low'=>$basis==='both'?$jointLow:null,
-        'joint_high'=>$basis==='both'?$jointHigh:null,
-        'ranges_overlap'=>$basis==='both'];
+        'joint_low'=>$jointLow !== null && $jointLow <= $jointHigh?$jointLow:null,
+        'joint_high'=>$jointHigh !== null && $jointLow <= $jointHigh?$jointHigh:null,
+        'ranges_overlap'=>$jointLow !== null && $jointLow <= $jointHigh];
 }
 
 function market_negotiation(array $market, ?int $asking, ?int $renovation = null, int $otherCosts = 0): ?array {
