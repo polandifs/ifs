@@ -12,9 +12,10 @@ header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
 if (empty($_SESSION['auth'])) { header('Location: ../index.php'); exit; }
 $db = homes_db();
-$homes = $db->query('SELECT * FROM homes ORDER BY first_seen DESC LIMIT 150')->fetchAll(PDO::FETCH_ASSOC);
+$uniqueWhere = "source <> 'Morizon' OR NOT EXISTS (SELECT 1 FROM homes g WHERE g.source='Gratka' AND g.title=homes.title AND g.price=homes.price AND g.area=homes.area)";
+$homes = $db->query('SELECT * FROM homes WHERE ' . $uniqueWhere . ' ORDER BY first_seen DESC LIMIT 150')->fetchAll(PDO::FETCH_ASSOC);
 $scans = $db->query('SELECT s.* FROM scans s JOIN (SELECT source,MAX(id) id FROM scans GROUP BY source) m ON m.id=s.id ORDER BY s.source')->fetchAll(PDO::FETCH_ASSOC);
-$count = (int)$db->query('SELECT COUNT(*) FROM homes')->fetchColumn();
+$count = (int)$db->query('SELECT COUNT(*) FROM homes WHERE ' . $uniqueWhere)->fetchColumn();
 $subs = (int)$db->query('SELECT COUNT(*) FROM subscriptions')->fetchColumn();
 $cfg = homes_push_config();
 $latest = (int)$db->query('SELECT COALESCE(MAX(id),0) FROM alerts')->fetchColumn();
