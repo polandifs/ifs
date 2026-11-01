@@ -80,6 +80,8 @@ function homes_html_offers(string $html, string $source): array {
             $location = $xpath->query('.//*[@data-testid="location-date"]', $card)->item(0);
             if (!$link || !$location || !preg_match('/^Kwidzyn\s*-/u', trim($location->textContent))) continue;
             $url = $link->getAttribute('href');
+            if (str_starts_with($url, '/d/oferta/')) $url = 'https://www.olx.pl' . $url;
+            $url = strtok($url, '?') ?: $url;
             if (parse_url($url, PHP_URL_HOST) !== 'www.olx.pl' || strpos($url, '/d/oferta/') === false) continue;
             $title = trim($link->textContent);
             $priceNode = $xpath->query('.//*[@data-testid="ad-price"]', $card)->item(0);
