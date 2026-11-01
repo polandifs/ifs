@@ -14,6 +14,7 @@ $sources = [
     ['DE', 'Kleinanzeigen', 'https://www.kleinanzeigen.de/s-wohnmobil-beschadigt/k0', 'kleinanzeigen.de', '/s-anzeige/'],
     ['NL', 'Marktplaats', 'https://www.marktplaats.nl/q/camper+schade/', 'marktplaats.nl', '/v/'],
     ['BE', '2dehands', 'https://www.2dehands.be/q/camper+schade/', '2dehands.be', '/v/'],
+    ['PL', 'WybierzKampera', 'https://wybierzkampera.pl/pobierz/kampery-oferty.csv', '', ''],
 ];
 
 function fetch_page(string $url): string
@@ -98,6 +99,50 @@ function candidates(string $html, array $source): array
     return array_values($found);
 }
 
+function reference_candidates(string $csv): array
+{
+    $stream = fopen('php://temp', 'w+');
+    fwrite($stream, $csv);
+    rewind($stream);
+    $header = fgetcsv($stream, 0, ';');
+    if (!is_array($header)) throw new RuntimeException('Nieprawidłowy plik CSV');
+    $header = array_map(static function ($x) { return trim(str_replace("\xEF\xBB\xBF", '', $x)); }, $header);
+    $required = ['Stan', 'Typ', 'Marka', 'Model', 'Rok', 'Przebieg km', 'Cena zł brutto', 'Link do ogłoszenia'];
+    if (array_diff($required, $header)) throw new RuntimeException('Zmieniły się kolumny CSV');
+    $rows = []; $groups = [];
+    while (($values = fgetcsv($stream, 0, ';')) !== false) {
+        if (count($values) !== count($header)) continue;
+        $r = array_combine($header, $values);
+        if (mb_strtolower(trim($r['Stan'])) !== 'używany') continue;
+        $year = (int)$r['Rok'];
+        $price = (int)preg_replace('/\D/', '', $r['Cena zł brutto']);
+        if ($year < 1980 || $year > (int)date('Y') || $price < 30000 || $price > 300000) continue;
+        $type = trim($r['Typ']);
+        $key = $type . '|' . (int)(floor($year / 5) * 5);
+        $rows[] = [$r, $price, $key];
+        $groups[$key][] = $price;
+    }
+    fclose($stream);
+    foreach ($groups as &$prices) sort($prices, SORT_NUMERIC);
+    unset($prices);
+    $out = [];
+    foreach ($rows as [$r, $price, $key]) {
+        $prices = $groups[$key];
+        if (count($prices) < 12) continue;
+        $median = $prices[(int)floor(count($prices) / 2)];
+        if ($price >= $median * 0.70) continue;
+        $url = trim($r['Link do ogłoszenia']);
+        if (!filter_var($url, FILTER_VALIDATE_URL) || strtolower((string)parse_url($url, PHP_URL_SCHEME)) !== 'https') continue;
+        $discount = (int)round((1 - $price / $median) * 100);
+        $title = clean_text($r['Marka'] . ' ' . $r['Model'] . ' (' . $r['Rok'] . ', ' . $r['Przebieg km'] . ' km)');
+        $out[$url] = ['url' => $url, 'title' => mb_substr($title, 0, 180), 'country' => 'PL',
+            'source' => 'WybierzKampera', 'price_text' => number_format($price, 0, ',', ' ') . ' zł',
+            'signal' => $discount . '% poniżej mediany typu i rocznika'];
+    }
+    uasort($out, static function ($a, $b) { return (int)$b['signal'] <=> (int)$a['signal']; });
+    return array_slice(array_values($out), 0, 30);
+}
+
 $database = db();
 $insert = $database->prepare('INSERT OR IGNORE INTO discoveries (url,title,country,source,price_text,signal) VALUES (:url,:title,:country,:source,:price_text,:signal)');
 $previous = $database->prepare('SELECT price_text FROM discoveries WHERE url = ?');
@@ -107,7 +152,13 @@ $log = $database->prepare('INSERT INTO scan_runs (source,found,added,error) VALU
 foreach ($sources as $source) {
     $found = 0; $added = 0; $error = '';
     try {
-        $items = candidates(fetch_page($source[2]), $source);
+        if ($source[1] === 'WybierzKampera') {
+            $last = $database->query("SELECT scanned_at FROM scan_runs WHERE source = 'WybierzKampera' AND error = '' ORDER BY id DESC LIMIT 1")->fetchColumn();
+            if (is_string($last) && strtotime($last . ' UTC') > time() - 20 * 3600) continue;
+            $items = reference_candidates(fetch_page($source[2]));
+        } else {
+            $items = candidates(fetch_page($source[2]), $source);
+        }
         $found = count($items);
         foreach ($items as $item) {
             $previous->execute([$item['url']]);
@@ -124,7 +175,7 @@ foreach ($sources as $source) {
             $update->execute(['url' => $item['url'], 'title' => $item['title'],
                 'price_text' => $item['price_text'], 'signal' => $item['signal']]);
         }
-        if ($found === 0) $error = 'Brak pasujących wyników lub zmieniony układ strony';
+        if ($found === 0) $error = 'Brak kandydatów w tej próbie';
     } catch (Throwable $e) { $error = mb_substr($e->getMessage(), 0, 180); }
     $log->execute([$source[1], $found, $added, $error]);
     echo $source[1] . ': ' . $found . ' wyników, ' . $added . ' nowych' . ($error ? ', ' . $error : '') . PHP_EOL;
