@@ -29,13 +29,13 @@ function homes_sources(): array {
         'Morizon' => 'https://www.morizon.pl/mieszkania/kwidzyn/',
         'Domiporta' => 'https://www.domiporta.pl/mieszkanie/sprzedam/pomorskie/kwidzyn',
         'GetHome' => 'https://gethome.pl/mieszkania/na-sprzedaz/kwidzyn/',
+        'OLX' => 'https://www.olx.pl/nieruchomosci/mieszkania/sprzedaz/kwidzyn/',
         'Sprzedajemy' => 'https://sprzedajemy.pl/kwidzyn/nieruchomosci/mieszkania/sprzedaz',
     ];
 }
 
 function homes_requested_sources(): array {
     return homes_sources() + [
-        'OLX' => 'https://www.olx.pl/nieruchomosci/mieszkania/sprzedaz/kwidzyn/',
         'Lento' => 'https://kwidzyn.lento.pl/nieruchomosci/mieszkania/sprzedaz.html',
         'Okolica' => 'https://www.okolica.pl/mieszkanie/sprzedam/kwidzyn/',
         'Otodom' => 'https://www.otodom.pl/',
@@ -149,6 +149,22 @@ function homes_offers(string $html, string $source): array {
         $data = json_decode($json, true);
         if (!is_array($data)) continue;
         $offers = $data['offers']['offers'] ?? $data['mainEntity']['offers'][0]['offers'] ?? [];
+        if ($source === 'OLX' && ($data['@type'] ?? '') === 'Product') {
+            foreach ($data['offers']['areaServed']['offers'] ?? [] as $offer) {
+                if (!is_array($offer) || mb_strtolower((string)($offer['areaServed']['name'] ?? '')) !== 'kwidzyn') continue;
+                $url = (string)($offer['url'] ?? '');
+                if (parse_url($url, PHP_URL_HOST) !== 'www.olx.pl' || strpos($url, '/d/oferta/') === false) continue;
+                $title = trim((string)($offer['name'] ?? 'Mieszkanie Kwidzyn'));
+                $price = filter_var($offer['price'] ?? null, FILTER_VALIDATE_FLOAT);
+                $area = null; $rooms = null;
+                if (preg_match('/(\d+(?:[,.]\d+)?)\s*m(?:2|²|\b)/iu', $title, $m)) $area = (float)str_replace(',', '.', $m[1]);
+                if (preg_match('/(\d+)\s*(?:-|\s*)\s*(?:pok|poko)/iu', $title, $m)) $rooms = (int)$m[1];
+                $image = $offer['image'] ?? '';
+                if (is_array($image)) $image = $image[0] ?? '';
+                $out[$url] = homes_card_offer($url, $source, $title, $price === false ? null : (int)round($price), $area, $rooms, '', (string)$image);
+            }
+            continue;
+        }
         if ($source === 'Domiporta') {
             foreach ($data['@graph'] ?? [] as $node) {
                 if (($node['@type'] ?? '') === 'ItemList') {
