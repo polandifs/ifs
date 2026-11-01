@@ -15,7 +15,7 @@ Prywatny panel do gromadzenia ofert kamperów i przyczep oraz szacowania wyniku 
 3. Wygeneruj hash hasła poleceniem `php -r 'echo password_hash("TWOJE_HASLO", PASSWORD_DEFAULT), PHP_EOL;'` i wklej go jako `password_hash` w `config.php`. Nie zapisuj jawnego hasła w pliku.
 4. Ustaw losowy, długi `app_key` w `config.php` (np. `bin2hex(random_bytes(32))` uruchomione w PHP).
 5. Ustaw ręcznie kurs EUR/PLN w panelu dla każdej oferty wycenionej w euro. Nie jest pobierany automatycznie.
-6. Opcjonalnie dodaj klucz SerpAPI w `config.php`, aby użyć wyszukiwania. Każde wyszukanie może zużywać limit usługi.
+6. Uruchom `php discover.php` z katalogu aplikacji. W cPanel ustaw harmonogram co 3 godziny: `0 */3 * * * /usr/local/bin/php /home/ifs/public_html/ifs-poland.com/ifskampery/discover.php >/dev/null 2>&1` (ścieżkę PHP dopasuj do serwera).
 7. Wejdź na adres panelu przez HTTPS i zaloguj się.
 
 Plik `config.php` i katalog `data/` są blokowane przez reguły `.htaccess`. Przy hostingu bez Apache umieść je poza katalogiem publicznym i dostosuj ścieżki w `app.php`.
@@ -23,8 +23,8 @@ Plik `config.php` i katalog `data/` są blokowane przez reguły `.htaccess`. Prz
 ## Zakres
 
 - Ręczne zapisywanie ofert z usuwaniem duplikatów po adresie URL.
-- Wyszukiwanie publicznych wyników Google przez SerpAPI w PL, DE, NL i BE, osobno na portalach ogłoszeniowych i w publicznych wynikach Facebooka. Wyniki są tropami do sprawdzenia; nie potwierdzają dostępności ani ceny.
+- Cykliczne sprawdzanie publicznych stron wyszukiwania Otomoto, Kleinanzeigen, Marktplaats i 2dehands w PL, DE, NL i BE. Wyniki są kandydatami do sprawdzenia; nie potwierdzają dostępności, stanu, ceny ani zysku. Nie obejmują prywatnych grup Facebooka.
 - Kalkulacja przy cenie ofertowej i przy zakładanej negocjacji, z kosztami naprawy, transportu i rezerwą.
 - Oznaczenie scenariusza jako „do sprawdzenia”, gdy szacowana nadwyżka wynosi co najmniej 15 tys. zł; priorytet od 25 tys. zł.
 
-Panel nie przeszukuje prywatnych grup Facebooka i nie pobiera automatycznie ich treści. Link z takiej grupy można zapisać ręcznie. Nie ma jeszcze harmonogramu, powiadomień ani integracji z cPanel; to kolejne etapy po sprawdzeniu hostingu i źródeł ofert.
+Skan działa w harmonogramie serwera i pokazuje ostatni wynik każdego źródła. Portale mogą zmieniać układ stron lub blokować automatyczne pobieranie; błąd źródła jest wtedy widoczny w panelu. Link z prywatnej grupy można zapisać ręcznie.
