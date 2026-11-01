@@ -22,16 +22,24 @@ if ($status !== 0) {
 try {
     fwrite(STDOUT, "Wpisz nowe hasło panelu (min. 12 znaków) i naciśnij Enter: ");
     $password = fgets(STDIN);
+    fwrite(STDOUT, "\nPowtórz hasło i naciśnij Enter: ");
+    $confirmation = fgets(STDIN);
 } finally {
     exec('stty echo 2>/dev/null');
     fwrite(STDOUT, "\n");
 }
 
-if ($password === false) {
+if ($password === false || $confirmation === false) {
     fwrite(STDERR, "Nie odczytano hasła.\n");
     exit(1);
 }
 $password = rtrim($password, "\r\n");
+$confirmation = rtrim($confirmation, "\r\n");
+if (!hash_equals($password, $confirmation)) {
+    fwrite(STDERR, "Hasła nie są jednakowe. Nie zapisano konfiguracji.\n");
+    exit(1);
+}
+unset($confirmation);
 if (strlen($password) < 12) {
     fwrite(STDERR, "Hasło jest za krótkie. Nie zapisano konfiguracji.\n");
     exit(1);
