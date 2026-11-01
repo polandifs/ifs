@@ -28,17 +28,17 @@ function homes_sources(): array {
         'Morizon' => 'https://www.morizon.pl/mieszkania/kwidzyn/',
         'Domiporta' => 'https://www.domiporta.pl/mieszkanie/sprzedam/pomorskie/kwidzyn',
         'GetHome' => 'https://gethome.pl/mieszkania/na-sprzedaz/kwidzyn/',
+        'Lento' => 'https://kwidzyn.lento.pl/nieruchomosci/mieszkania/sprzedaz.html',
         'Sprzedajemy' => 'https://sprzedajemy.pl/kwidzyn/nieruchomosci/mieszkania/sprzedaz',
+        'Szybko' => 'https://www.szybko.pl/l/na-sprzedaz/lokal-mieszkalny/Kwidzyn?inne=ogloszenia',
     ];
 }
 
 function homes_requested_sources(): array {
     return homes_sources() + [
-        'Lento' => 'https://kwidzyn.lento.pl/nieruchomosci/mieszkania/sprzedaz.html',
         'OLX' => 'https://www.olx.pl/nieruchomosci/mieszkania/sprzedaz/kwidzyn/',
         'Okolica' => 'https://www.okolica.pl/mieszkanie/sprzedam/kwidzyn/',
         'Otodom' => 'https://www.otodom.pl/',
-        'Szybko' => 'https://www.szybko.pl/l/na-sprzedaz/lokal-mieszkalny/Kwidzyn?inne=ogloszenia',
         'Tabelaofert' => 'https://tabelaofert.pl/sprzedaz/mieszkania/kwidzyn',
     ];
 }
@@ -91,6 +91,36 @@ function homes_html_offers(string $html, string $source): array {
             $out[$url] = homes_card_offer($url, $source, trim($titleNode->textContent), ctype_digit($price) ? (int)$price : null,
                 is_numeric($area) ? (float)$area : null, $roomsNode ? (int)$roomsNode->textContent : null, $street, $image ? $image->getAttribute('src') : '');
         }
+    } elseif ($source === 'Lento') {
+        foreach ($xpath->query('//div[contains(concat(" ",normalize-space(@class)," ")," tablelist-tr ")]') as $card) {
+            $link = $xpath->query('.//a[contains(concat(" ",normalize-space(@class)," ")," title-list-item ")]', $card)->item(0);
+            if (!$link || parse_url($link->getAttribute('href'), PHP_URL_HOST) !== 'kwidzyn.lento.pl') continue;
+            $url = $link->getAttribute('href');
+            $priceNode = $xpath->query('.//span[contains(concat(" ",normalize-space(@class)," ")," price-list-item ")]', $card)->item(0);
+            $price = $priceNode ? preg_replace('/\D+/', '', $priceNode->textContent) : '';
+            $area = null; $rooms = null;
+            foreach ($xpath->query('.//span[contains(concat(" ",normalize-space(@class)," ")," list-atrr-item-tab ")]', $card) as $attribute) {
+                if (preg_match('/(\d+(?:[,.]\d+)?)\s*m2/u', $attribute->textContent, $m)) $area = (float)str_replace(',', '.', $m[1]);
+                if (preg_match('/(\d+)\s*pokoj/u', $attribute->textContent, $m)) $rooms = (int)$m[1];
+            }
+            $image = $xpath->query('.//img[@src]', $card)->item(0);
+            $out[$url] = homes_card_offer($url, $source, trim($link->textContent) . ' · Kwidzyn', ctype_digit($price) ? (int)$price : null,
+                $area, $rooms, '', $image ? $image->getAttribute('src') : '');
+        }
+    } elseif ($source === 'Szybko') {
+        foreach ($xpath->query('//*[@data-assetid and contains(concat(" ",normalize-space(@class)," ")," listing-item ")]') as $card) {
+            $link = $xpath->query('.//a[contains(concat(" ",normalize-space(@class)," ")," listing-title-heading ")]', $card)->item(0);
+            $priceNode = $xpath->query('.//*[@itemprop="price"]', $card)->item(0);
+            if (!$link || !$priceNode || strpos($link->getAttribute('href'), '/Kwidzyn/oferta-') === false) continue;
+            $url = 'https://www.szybko.pl' . $link->getAttribute('href');
+            $areaNode = $xpath->query('.//li[contains(concat(" ",normalize-space(@class)," ")," area ")]', $card)->item(0);
+            $roomsNode = $xpath->query('.//li[contains(concat(" ",normalize-space(@class)," ")," rooms ")]', $card)->item(0);
+            $image = $xpath->query('.//img[@src]', $card)->item(0);
+            $area = $areaNode && preg_match('/(\d+(?:[,.]\d+)?)/u', $areaNode->textContent, $m) ? (float)str_replace(',', '.', $m[1]) : null;
+            $rooms = $roomsNode && preg_match('/(\d+)/u', $roomsNode->textContent, $m) ? (int)$m[1] : null;
+            $out[$url] = homes_card_offer($url, $source, trim($link->textContent) . ' · Kwidzyn', (int)$priceNode->getAttribute('content'),
+                $area, $rooms, '', $image ? $image->getAttribute('src') : '');
+        }
     }
     if (!$out) throw new RuntimeException('Nie znaleziono poprawnych ofert; możliwa zmiana strony');
     return array_values($out);
@@ -109,7 +139,7 @@ function homes_fetch(string $url): string {
 }
 
 function homes_offers(string $html, string $source): array {
-    if ($source === 'Adresowo' || $source === 'GetHome') return homes_html_offers($html, $source);
+    if (in_array($source, ['Adresowo', 'GetHome', 'Lento', 'Szybko'], true)) return homes_html_offers($html, $source);
     $matches = [];
     preg_match_all('~<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>~si', $html, $matches);
     $out = [];
