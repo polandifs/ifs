@@ -136,6 +136,7 @@ function reference_candidates(string $csv, PDO $database): array
                 'sleeping_places' => csv_number($r['Miejsca spanie'] ?? ''),
                 'seller' => trim($r['Sprzedawca'] ?? ''), 'city' => trim($r['Miasto'] ?? ''),
                 'region' => trim($r['Województwo'] ?? ''), 'checked_at' => trim($r['Sprawdzono'] ?? ''),
+                'reference_url' => trim($r['Karta oferty'] ?? ''),
             ];
         }
         if (mb_strtolower(trim($r['Stan'])) !== 'używany') continue;
