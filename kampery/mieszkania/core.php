@@ -245,6 +245,21 @@ function homes_offers(string $html, string $source): array {
                 'rooms' => $rooms === false ? null : $rooms, 'street' => mb_substr(trim((string)($address['streetAddress'] ?? '')), 0, 100), 'image_url' => mb_substr($image, 0, 2048)];
         }
     }
+    if ($source === 'OLX') {
+        // The JSON-LD list often omits photos that are present in the listing cards.
+        try {
+            foreach (homes_html_offers($html, 'OLX') as $card) {
+                $url = $card['url'];
+                if (!isset($out[$url])) {
+                    $out[$url] = $card;
+                } elseif ($card['image_url'] !== '') {
+                    $out[$url]['image_url'] = $card['image_url'];
+                }
+            }
+        } catch (RuntimeException $e) {
+            // Keep the structured results if OLX changes its card markup.
+        }
+    }
     if (!$out) throw new RuntimeException('Nie znaleziono poprawnych ofert; możliwa zmiana strony');
     return array_values($out);
 }
