@@ -133,11 +133,11 @@ function field(?array $row, string $name, string $fallback = ''): string { retur
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Łowca Kamperów</title>
-  <link rel="stylesheet" href="style.css?v=20261101-analysis">
+  <link rel="stylesheet" href="style.css?v=20261101-catalog">
 </head>
 <body>
 <main class="shell">
-  <header class="top"><div><p class="eyebrow">PRYWATNY PANEL</p><h1>Łowca Kamperów</h1><p>Oferty, weryfikacja i scenariusze zakupu pod remont.</p></div><?php if ($logged): ?><form method="post"><input type="hidden" name="csrf" value="<?= csrf_token($config) ?>"><button class="quiet" name="action" value="logout">Wyloguj</button></form><?php endif; ?></header>
+  <header class="top"><div><p class="eyebrow">PRYWATNY PANEL</p><h1>Łowca Kamperów</h1><p>Oferty, weryfikacja i scenariusze zakupu pod remont.</p><?php if ($logged): ?><p><a href="alkowy.php">Przeglądaj alkowy →</a></p><?php endif; ?></div><?php if ($logged): ?><form method="post"><input type="hidden" name="csrf" value="<?= csrf_token($config) ?>"><button class="quiet" name="action" value="logout">Wyloguj</button></form><?php endif; ?></header>
   <?php if ($error): ?><div class="alert error" role="alert"><?= h($error) ?></div><?php endif; ?>
   <?php if ($message): ?><div class="alert success" role="status"><?= h($message) ?></div><?php endif; ?>
   <?php if (!$logged): ?>
@@ -169,7 +169,7 @@ function field(?array $row, string $name, string $fallback = ''): string { retur
         <label>Rodzaj<select name="kind"><option value="kamper" <?= (($edit['kind'] ?? '') === 'kamper') ? 'selected' : '' ?>>Kamper</option><option value="przyczepa" <?= (($edit['kind'] ?? '') === 'przyczepa') ? 'selected' : '' ?>>Przyczepa</option></select></label>
         <label>Status<select name="status"><?php foreach (['nowa'=>'Nowa','sprawdzana'=>'Sprawdzana','odrzucona'=>'Odrzucona','kupiona'=>'Kupiona','sprzedana'=>'Sprzedana'] as $code=>$label): ?><option value="<?= $code ?>" <?= (($edit['status'] ?? 'nowa') === $code) ? 'selected' : '' ?>><?= $label ?></option><?php endforeach; ?></select></label>
         <label>Waluta<select name="currency"><option value="PLN" <?= (($edit['currency'] ?? $selectedCurrency) === 'PLN') ? 'selected' : '' ?>>PLN</option><option value="EUR" <?= (($edit['currency'] ?? $selectedCurrency) === 'EUR') ? 'selected' : '' ?>>EUR</option></select></label>
-        <label>Cena ofertowa<input type="number" name="asking_price" min="0.01" step="0.01" required value="<?= field($edit, 'asking_price', $selectedPrice) ?>"></label>
+        <label>Cena ofertowa<input type="number" name="asking_price" min="0.01" step="0.01" required value="<?= field($edit, 'asking_price', $selectedPrice ?: (string)($_GET['add_price'] ?? '')) ?>"></label>
         <label>Kurs EUR/PLN, wpisany ręcznie<input type="number" name="eur_rate" min="0.0001" step="0.0001" value="<?= field($edit, 'eur_rate') ?>"></label>
         <label>Cena po negocjacji <small>założenie</small><input type="number" name="negotiated_price" min="0" step="0.01" value="<?= field($edit, 'negotiated_price') ?>"></label>
         <label>Naprawa, zł<input type="number" name="repair_cost" min="0" step="0.01" value="<?= field($edit, 'repair_cost', '0') ?>"></label>
