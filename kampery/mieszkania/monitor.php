@@ -68,3 +68,12 @@ if ($new) {
     if (!homes_email_alerts(array_values($new))) error_log('Kwidzyn email: mail() odmówił przyjęcia wiadomości');
     try { homes_push_all($db); } catch (Throwable $e) { error_log('Kwidzyn push: ' . $e->getMessage()); }
 }
+$missingImages = $db->query("SELECT h.url FROM homes h LEFT JOIN image_attempts a ON a.url=h.url WHERE h.source='OLX' AND h.image_url='' AND (a.url IS NULL OR a.attempted_at < datetime('now','-1 day')) ORDER BY h.first_seen DESC LIMIT 8")->fetchAll(PDO::FETCH_COLUMN);
+$markImageAttempt = $db->prepare('INSERT OR REPLACE INTO image_attempts (url,attempted_at) VALUES (?,CURRENT_TIMESTAMP)');
+$saveImage = $db->prepare('UPDATE homes SET image_url=? WHERE url=? AND image_url=\'\'');
+foreach ($missingImages as $url) {
+    $markImageAttempt->execute([$url]);
+    $image = homes_detail_image($url);
+    if ($image !== '') $saveImage->execute([$image, $url]);
+}
+if ($missingImages) echo 'Zdjęcia OLX: sprawdzono ' . count($missingImages) . " brakujących ofert\n";
