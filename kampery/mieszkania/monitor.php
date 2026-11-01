@@ -9,10 +9,12 @@ $lock = fopen(dirname(__DIR__) . '/data/mieszkania.lock', 'c');
 if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) exit("Skan już trwa\n");
 $db = homes_db();
 $insert = $db->prepare('INSERT OR IGNORE INTO homes (url,source,title,price,area,rooms,street,image_url) VALUES (:url,:source,:title,:price,:area,:rooms,:street,:image_url)');
-$update = $db->prepare("UPDATE homes SET title=:title,price=:price,area=:area,rooms=:rooms,street=:street,image_url=COALESCE(NULLIF(:image_url,''),image_url),last_seen=CURRENT_TIMESTAMP WHERE url=:url");
+$update = $db->prepare("UPDATE homes SET title=COALESCE(NULLIF(:title,''),title),price=COALESCE(:price,price),area=COALESCE(:area,area),rooms=COALESCE(:rooms,rooms),street=COALESCE(NULLIF(:street,''),street),image_url=COALESCE(NULLIF(:image_url,''),image_url),last_seen=CURRENT_TIMESTAMP WHERE url=:url");
 $log = $db->prepare('INSERT INTO scans (source,found,added,error) VALUES (?,?,?,?)');
-$oldPrice = $db->prepare('SELECT price FROM homes WHERE url=?');
+$oldOffer = $db->prepare('SELECT title,price,area,rooms,street,last_seen FROM homes WHERE url=?');
 $history = $db->prepare('INSERT INTO price_history (url,old_price,new_price) VALUES (?,?,?)');
+$event = $db->prepare('INSERT INTO offer_events (url,kind,old_value,new_value) VALUES (?,?,?,?)');
+$scansDuringGap = $db->prepare("SELECT COUNT(*) FROM scans WHERE source=? AND error='' AND found>0 AND checked_at>?");
 $new = [];
 $baselineOlxPages = in_array('--baseline-olx-pages', $argv, true);
 foreach (homes_sources() as $source => $url) {
@@ -45,11 +47,27 @@ foreach (homes_sources() as $source => $url) {
                 }
                 if ($previous > 0 && !$duplicate && !($baselineOlxPages && $source === 'OLX' && !isset($firstPageUrls[$offer['url']]))) $new[$offer['url']] = $offer;
             } else {
-                $oldPrice->execute([$offer['url']]);
-                $before = $oldPrice->fetchColumn();
+                $oldOffer->execute([$offer['url']]);
+                $old = $oldOffer->fetch(PDO::FETCH_ASSOC);
+                $before = $old['price'] ?? null;
                 if ($before !== false && $before !== null && $offer['price'] !== null && (int)$before !== $offer['price']) {
                     $history->execute([$offer['url'], (int)$before, $offer['price']]);
                     if ($offer['price'] < (int)$before) $new[$offer['url']] = ['title' => 'Obniżka ceny: ' . $offer['title'], 'url' => $offer['url']];
+                } elseif ($before === null && $offer['price'] !== null) {
+                    $event->execute([$offer['url'], 'price_added', '', (string)$offer['price']]);
+                }
+                if ($old) {
+                    foreach (['title', 'area', 'rooms', 'street'] as $field) {
+                        $beforeValue = trim((string)$old[$field]);
+                        $afterValue = trim((string)$offer[$field]);
+                        if ($afterValue !== '' && $beforeValue !== $afterValue) {
+                            $event->execute([$offer['url'], $field, $beforeValue, $afterValue]);
+                        }
+                    }
+                    if (time() - strtotime($old['last_seen']) >= 3600) {
+                        $scansDuringGap->execute([$source, $old['last_seen']]);
+                        if ((int)$scansDuringGap->fetchColumn() > 0) $event->execute([$offer['url'], 'returned', '', '']);
+                    }
                 }
                 $update->execute(array_diff_key($offer, ['source' => true]));
             }
