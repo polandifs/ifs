@@ -9,7 +9,7 @@ $lock = fopen(dirname(__DIR__) . '/data/mieszkania.lock', 'c');
 if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) exit("Skan już trwa\n");
 $db = homes_db();
 $insert = $db->prepare('INSERT OR IGNORE INTO homes (url,source,title,price,area,rooms,street,image_url) VALUES (:url,:source,:title,:price,:area,:rooms,:street,:image_url)');
-$update = $db->prepare('UPDATE homes SET title=:title,price=:price,area=:area,rooms=:rooms,street=:street,image_url=:image_url,last_seen=CURRENT_TIMESTAMP WHERE url=:url');
+$update = $db->prepare("UPDATE homes SET title=:title,price=:price,area=:area,rooms=:rooms,street=:street,image_url=COALESCE(NULLIF(:image_url,''),image_url),last_seen=CURRENT_TIMESTAMP WHERE url=:url");
 $log = $db->prepare('INSERT INTO scans (source,found,added,error) VALUES (?,?,?,?)');
 $oldPrice = $db->prepare('SELECT price FROM homes WHERE url=?');
 $history = $db->prepare('INSERT INTO price_history (url,old_price,new_price) VALUES (?,?,?)');
