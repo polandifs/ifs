@@ -199,7 +199,7 @@ foreach ($sources as $source) {
     try {
         if ($source[1] === 'WybierzKampera') {
             $last = $database->query("SELECT scanned_at FROM scan_runs WHERE source = 'WybierzKampera' AND error = '' ORDER BY id DESC LIMIT 1")->fetchColumn();
-            if (is_string($last) && strtotime($last . ' UTC') > time() - 20 * 3600) continue;
+            if (!in_array('--refresh-catalog', $argv, true) && is_string($last) && strtotime($last . ' UTC') > time() - 20 * 3600) continue;
             $items = reference_candidates(fetch_page($source[2]), $database);
         } else {
             $items = candidates(fetch_page($source[2]), $source);
