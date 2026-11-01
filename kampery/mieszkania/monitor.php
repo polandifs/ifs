@@ -60,7 +60,11 @@ foreach (homes_sources() as $source => $url) {
                     foreach (['title', 'area', 'rooms', 'street'] as $field) {
                         $beforeValue = trim((string)$old[$field]);
                         $afterValue = trim((string)$offer[$field]);
-                        if ($afterValue !== '' && $beforeValue !== $afterValue) {
+                        $changed = $beforeValue !== $afterValue;
+                        if ($changed && in_array($field, ['area', 'rooms'], true) && is_numeric($beforeValue) && is_numeric($afterValue)) {
+                            $changed = abs((float)$beforeValue - (float)$afterValue) > 0.001;
+                        }
+                        if ($afterValue !== '' && $changed) {
                             $event->execute([$offer['url'], $field, $beforeValue, $afterValue]);
                         }
                     }
