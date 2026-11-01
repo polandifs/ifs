@@ -50,6 +50,7 @@ function candidates(string $html, array $source): array
     $dom->loadHTML('<?xml encoding="utf-8"?>' . $html, LIBXML_NOERROR | LIBXML_NOWARNING);
     libxml_clear_errors();
     $xp = new DOMXPath($dom);
+    foreach ($xp->query('//script|//style') as $noise) $noise->parentNode->removeChild($noise);
     $found = [];
     foreach ($xp->query('//a[@href]') as $a) {
         $href = $a->getAttribute('href');
@@ -68,12 +69,12 @@ function candidates(string $html, array $source): array
             $card = $card->parentNode;
             if (in_array(strtolower($card->nodeName), ['article', 'li'], true)) break;
         }
-        $title = clean_text($a->textContent);
-        if (mb_strlen($title) < 12) {
+        $title = clean_text($a->getAttribute('aria-label') ?: $a->textContent);
+        if (mb_strlen($title) < 12 || mb_strlen($title) > 180) {
             $imgs = $xp->query('.//img[@alt or @title]', $a);
             if ($imgs->length) $title = clean_text($imgs->item(0)->getAttribute('title') ?: $imgs->item(0)->getAttribute('alt'));
         }
-        if (mb_strlen($title) < 12) {
+        if (mb_strlen($title) < 12 || mb_strlen($title) > 180) {
             $headings = $xp->query('.//*[self::h2 or self::h3]', $card);
             if ($headings->length) $title = clean_text($headings->item(0)->textContent);
         }
@@ -87,7 +88,7 @@ function candidates(string $html, array $source): array
         // Search pages can include unrelated promoted ads. Require a relevant vehicle term.
         if (!preg_match('/kamper|camper|wohnmobil|wohnwagen|przyczep|caravan/ui', $title . ' ' . mb_substr($body, 0, 250))) continue;
         $price = '';
-        if (preg_match('/(?:\d[\d\s.,]{2,14})\s?(?:zł|PLN|€|EUR)/u', $body, $m)) $price = clean_text($m[0]);
+        if (preg_match('/(?<!\d)(?:\d{1,3}(?:[ .\x{00A0}]\d{3})+|\d{4,7})(?:,\d{2})?\s?(?:zł|PLN|€|EUR)/u', $body, $m)) $price = clean_text($m[0]);
         $found[$url] = ['url' => $url, 'title' => mb_substr($title, 0, 180), 'country' => $country,
             'source' => $name, 'price_text' => $price, 'signal' => $signal];
         if (count($found) >= 60) break;
