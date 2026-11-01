@@ -93,7 +93,7 @@ if ($logged) {
         $stmt->execute([$editId]);
         $edit = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     }
-    $listings = db()->query('SELECT * FROM listings ORDER BY CASE status WHEN "nowa" THEN 0 WHEN "sprawdzana" THEN 1 ELSE 2 END, updated_at DESC, id DESC')->fetchAll(PDO::FETCH_ASSOC);
+    $listings = db()->query("SELECT * FROM listings ORDER BY CASE status WHEN 'nowa' THEN 0 WHEN 'sprawdzana' THEN 1 ELSE 2 END, updated_at DESC, id DESC")->fetchAll(PDO::FETCH_ASSOC);
 }
 
 function field(array|null $row, string $name, string $fallback = ''): string { return h(isset($row[$name]) ? (string)$row[$name] : $fallback); }
