@@ -23,7 +23,7 @@ Plik `config.php` i katalog `data/` są blokowane przez reguły `.htaccess`. Prz
 ## Zakres
 
 - Ręczne zapisywanie ofert z usuwaniem duplikatów po adresie URL.
-- Cykliczne sprawdzanie publicznych stron wyszukiwania Otomoto, Kleinanzeigen, Marktplaats i 2dehands w PL, DE, NL i BE. Wyniki są kandydatami do sprawdzenia; nie potwierdzają dostępności, stanu, ceny ani zysku. Nie obejmują prywatnych grup Facebooka.
+- Cykliczne sprawdzanie publicznych stron wyszukiwania Otomoto, Kleinanzeigen, Marktplaats i 2dehands w PL, DE, NL i BE. Skan zapisuje nowe linki, datę wykrycia, sygnał uszkodzenia i obniżkę ceny, gdy da się porównać odczyty. Wyniki są kandydatami do sprawdzenia; nie potwierdzają dostępności, stanu, ceny ani zysku. Nie obejmują prywatnych grup Facebooka.
 - Kalkulacja przy cenie ofertowej i przy zakładanej negocjacji, z kosztami naprawy, transportu i rezerwą.
 - Oznaczenie scenariusza jako „do sprawdzenia”, gdy szacowana nadwyżka wynosi co najmniej 15 tys. zł; priorytet od 25 tys. zł.
 
