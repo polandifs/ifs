@@ -37,9 +37,10 @@ function market_listing_summary(PDO $db, float $area, ?int $rooms = null, string
         'price_m2'=>(int)round(valuation_percentile($values, .5))]);
 }
 
-function market_valuation(PDO $db, float $area, string $street, ?int $rooms = null, string $condition = 'dobry', string $excludeUrl = ''): array {
+function market_valuation(PDO $db, float $area, string $street, ?int $rooms = null, string $condition = 'dobry', string $excludeUrl = '', bool $withCityFallback = false): array {
     $rcn = valuation_summary($db, $area, $street);
     $listings = market_listing_summary($db, $area, $rooms, $excludeUrl);
+    $rcnCity = $withCityFallback && !$rcn['available'] ? valuation_city_summary($db, $area) : null;
     // The source data do not identify condition consistently. Never infer a condition discount.
     $rcnValue = $rcn['available'] ? $rcn['median'] : null;
     $listingValue = $listings['available'] ? $listings['median'] : null;
@@ -56,11 +57,24 @@ function market_valuation(PDO $db, float $area, string $street, ?int $rooms = nu
         $estimate = $basis === 'both' ? $rcnValue : null;
     } elseif ($rcnValue !== null) { $basis = 'rcn'; }
     elseif ($listingValue !== null) { $basis = 'listings'; }
-    return ['rcn'=>$rcn, 'listings'=>$listings, 'rcn_value'=>$rcnValue,
+    return ['rcn'=>$rcn, 'rcn_city'=>$rcnCity, 'listings'=>$listings, 'rcn_value'=>$rcnValue,
         'listing_value'=>$listingValue, 'estimate'=>$estimate, 'basis'=>$basis,
         'joint_low'=>$jointLow !== null && $jointLow <= $jointHigh?$jointLow:null,
         'joint_high'=>$jointHigh !== null && $jointLow <= $jointHigh?$jointHigh:null,
         'ranges_overlap'=>$jointLow !== null && $jointLow <= $jointHigh];
+}
+
+function market_display_reference(array $market): array {
+    if ($market['estimate'] !== null) return ['value'=>$market['estimate'],
+        'label'=>'Punkt odniesienia RCN', 'note'=>'Potwierdzony porównaniem obu źródeł'];
+    if ($market['rcn_value'] !== null) return ['value'=>$market['rcn_value'],
+        'label'=>'Wstępny punkt RCN', 'note'=>'Źródła są rozbieżne; bez automatycznej propozycji ceny'];
+    if (($market['rcn_city']['available'] ?? false)) return ['value'=>$market['rcn_city']['median'],
+        'label'=>'Wstępny punkt RCN · Kwidzyn', 'note'=>'Całe miasto; wpisz ulicę dla dokładniejszego porównania'];
+    if ($market['listing_value'] !== null) return ['value'=>$market['listing_value'],
+        'label'=>'Orientacyjna mediana ogłoszeń', 'note'=>'Ceny ofertowe, bez potwierdzenia transakcjami RCN'];
+    return ['value'=>null, 'label'=>'Za mało danych do wyceny',
+        'note'=>'Sprawdź ulicę i porównywalne oferty'];
 }
 
 function market_negotiation(array $market, ?int $asking, ?int $renovation = null, int $otherCosts = 0): ?array {

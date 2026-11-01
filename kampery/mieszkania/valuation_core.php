@@ -154,6 +154,37 @@ function valuation_summary(PDO $db, float $area, string $street = ''): array {
     ]);
 }
 
+// A citywide fallback is shown only as an indicative reference when the local
+// street-based sample is unavailable. It does not qualify an offer for ranking
+// or an automatic negotiation suggestion.
+function valuation_city_summary(PDO $db, float $area): array {
+    $empty = ['available'=>false, 'count'=>0, 'raw_count'=>0, 'excluded_count'=>0,
+        'scope'=>'Kwidzyn · całe miasto', 'reason'=>'too_few', 'low'=>null,
+        'median'=>null, 'high'=>null, 'from'=>null, 'to'=>null];
+    if ($area < 15 || $area > 250) return $empty;
+    if (!$db->query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='rcn_transactions'")->fetchColumn()) {
+        $empty['reason'] = 'missing_data';
+        return $empty;
+    }
+    $since = gmdate('Y-m-d', strtotime('-24 months'));
+    $query = $db->prepare("SELECT sold_at,price_m2 FROM rcn_transactions WHERE market='rynekWtorny' AND sold_at>=? AND area BETWEEN ? AND ? AND price_m2 BETWEEN 1000 AND 50000");
+    $query->execute([$since, $area * .8, $area * 1.2]);
+    $rows = $query->fetchAll(PDO::FETCH_ASSOC);
+    $empty['raw_count'] = count($rows);
+    [$rows, $empty['excluded_count']] = valuation_trim_outliers($rows);
+    $empty['count'] = count($rows);
+    if (count($rows) < 5) return $empty;
+    $values = array_map(static fn(array $row): float => (float)$row['price_m2'], $rows);
+    sort($values, SORT_NUMERIC);
+    $dates = array_column($rows, 'sold_at');
+    $money = static fn(float $priceM2): int => (int)(round($priceM2 * $area / 1000) * 1000);
+    return array_merge($empty, ['available'=>true, 'reason'=>'',
+        'low'=>$money(valuation_percentile($values, .2)),
+        'median'=>$money(valuation_percentile($values, .5)),
+        'high'=>$money(valuation_percentile($values, .8)),
+        'from'=>min($dates), 'to'=>max($dates)]);
+}
+
 function valuation_scenario(array $summary, string $condition): ?int {
     if (!$summary['available']) return null;
     if ($condition === 'remont') return $summary['lower_quartile'];
