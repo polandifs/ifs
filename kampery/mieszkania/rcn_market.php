@@ -17,11 +17,14 @@ if ($area === false || $area < 15 || $area > 250) $area = 45.0;
 $street = isset($_GET['street']) && is_string($_GET['street']) ? mb_substr(trim($_GET['street']), 0, 100) : '';
 $exists = $db->query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='rcn_transactions'")->fetchColumn();
 $rows = [];
+$included = [];
+$excludedCount = 0;
 $synced = null;
 $scope = 'Podaj ulicę, aby wyznaczyć promień 500 m.';
 if ($exists) {
     $comparison = valuation_comparables($db, (float)$area, $street);
     $rows = $comparison['rows'];
+    [$included, $excludedCount] = valuation_trim_outliers($rows);
     $scope = $comparison['scope'];
     $synced = $db->query("SELECT value FROM rcn_meta WHERE key='synced_at'")->fetchColumn();
 }
@@ -32,6 +35,6 @@ function rcn_money(int $value): string { return number_format($value, 0, ',', ' 
 <header><div><h1>Transakcje mieszkań · Kwidzyn</h1><a href="watch.php">← Obserwowane oferty</a></div></header><main>
 <div class="card"><form method="get"><label>Metraż analizowanego mieszkania (m²) <input name="area" type="number" min="15" max="250" step="0.1" value="<?= homes_e((string)$area) ?>"></label><label>Ulica lub ulica i numer <input name="street" type="text" maxlength="100" style="width:180px" value="<?= homes_e($street) ?>" required></label><button type="submit">Pokaż transakcje</button></form>
 <p>Rynek wtórny · lokal mieszkalny · <?= homes_e($scope) ?> · ostatnie 24 miesiące · metraż od <?= number_format($area * 0.8, 1, ',', ' ') ?> do <?= number_format($area * 1.2, 1, ',', ' ') ?> m².</p>
-<p class="muted">Źródło: <a href="https://www.geoportal.gov.pl/pl/dane/rejestr-cen-nieruchomosci-rcn/" target="_blank" rel="noopener noreferrer">GUGiK, Rejestr Cen Nieruchomości ↗</a><?= $synced ? ' · pobrano ' . homes_e($synced) . ' UTC' : ' · dane jeszcze niepobrane' ?>. Ceny mogą obejmować prawa związane z lokalem. Stan, wyposażenie, piętro i budynek mogą się różnić; część transakcji trafia do rejestru z opóźnieniem.</p></div>
-<div class="card"><h2>Transakcje (<?= count($rows) ?>)</h2><?php if ($rows): ?><div class="table-wrap"><table><thead><tr><th>Data sprzedaży</th><th>Adres w RCN</th><th>Odległość od ulicy</th><th>Powierzchnia</th><th>Cena</th><th>Cena za m²</th></tr></thead><tbody><?php foreach ($rows as $row): ?><tr><td><?= homes_e($row['sold_at']) ?></td><td><?= homes_e(str_replace(['MSC:',';UL:',';NR_PORZ:'], ['', ', ul. ', ' '], $row['address'])) ?></td><td><?= (int)$row['distance_m'] ?> m</td><td><?= number_format((float)$row['area'], 1, ',', ' ') ?> m²</td><td><?= rcn_money((int)$row['price']) ?></td><td><?= rcn_money((int)round($row['price_m2'])) ?></td></tr><?php endforeach ?></tbody></table></div><?php else: ?><p>Brak transakcji w wybranym zakresie. Sprawdź nazwę ulicy.</p><?php endif ?></div>
+<p class="muted">Źródło: <a href="https://www.geoportal.gov.pl/pl/dane/rejestr-cen-nieruchomosci-rcn/" target="_blank" rel="noopener noreferrer">GUGiK, Rejestr Cen Nieruchomości ↗</a><?= $synced ? ' · pobrano ' . homes_e($synced) . ' UTC' : ' · dane jeszcze niepobrane' ?>. Ceny mogą obejmować prawa związane z lokalem. Stan, wyposażenie, piętro i budynek mogą się różnić; część transakcji trafia do rejestru z opóźnieniem.</p><p class="muted">Do mediany użyto <?= count($included) ?> z <?= count($rows) ?> transakcji; <?= $excludedCount ?> cen skrajnych pozostaje widocznych poniżej. Filtr nie ustala przyczyny skrajnej ceny.</p></div>
+<div class="card"><h2>Transakcje (<?= count($rows) ?>)</h2><?php if ($rows): ?><div class="table-wrap"><table><thead><tr><th>Data sprzedaży</th><th>Adres w RCN</th><th>Odległość od ulicy</th><th>Powierzchnia</th><th>Cena</th><th>Cena za m²</th><th>Analiza</th></tr></thead><tbody><?php foreach ($rows as $row): ?><tr><td><?= homes_e($row['sold_at']) ?></td><td><?= homes_e(str_replace(['MSC:',';UL:',';NR_PORZ:'], ['', ', ul. ', ' '], $row['address'])) ?></td><td><?= (int)$row['distance_m'] ?> m</td><td><?= number_format((float)$row['area'], 1, ',', ' ') ?> m²</td><td><?= rcn_money((int)$row['price']) ?></td><td><?= rcn_money((int)round($row['price_m2'])) ?></td><td><?= in_array($row, $included, true) ? 'Uwzględniona' : 'Cena skrajna' ?></td></tr><?php endforeach ?></tbody></table></div><?php else: ?><p>Brak transakcji w wybranym zakresie. Sprawdź nazwę ulicy.</p><?php endif ?></div>
 </main></body></html>
