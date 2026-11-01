@@ -76,6 +76,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['search_source'] = $source;
             header('Location: index.php#search'); exit;
         }
+        if ($action === 'facebook_add') {
+            $url = trim((string)($_POST['facebook_url'] ?? ''));
+            $parts = parse_url($url);
+            $host = strtolower((string)($parts['host'] ?? ''));
+            $path = (string)($parts['path'] ?? '');
+            if (($parts['scheme'] ?? '') !== 'https' || !in_array($host, ['facebook.com', 'www.facebook.com'], true)
+                || !preg_match('~^/groups/(?:963050657177584|campingicaravaningpolska)/posts/[0-9]+/?$~', $path)) {
+                throw new InvalidArgumentException('Wklej bezpośredni link do posta z grupy Camping i Caravaning Polska.');
+            }
+            $url = 'https://www.facebook.com' . rtrim($path, '/');
+            $title = trim(preg_replace('/\s+/u', ' ', (string)($_POST['facebook_title'] ?? '')) ?? '');
+            if (mb_strlen($title) < 12 || mb_strlen($title) > 180) throw new InvalidArgumentException('Podaj tytuł oferty (12–180 znaków).');
+            $price = trim((string)($_POST['facebook_price'] ?? ''));
+            if ($price !== '' && (!ctype_digit($price) || (int)$price < 1 || (int)$price > 10000000)) {
+                throw new InvalidArgumentException('Podaj cenę w pełnych złotych albo zostaw pole puste.');
+            }
+            $stmt = db()->prepare("INSERT OR IGNORE INTO discoveries(url,title,country,source,price_text,signal) VALUES (?,?,'PL','Facebook',?,'Wpis z grupy; cena i dostępność do sprawdzenia')");
+            $stmt->execute([$url, $title, $price === '' ? '' : number_format((int)$price, 0, ',', ' ') . ' zł']);
+            $_SESSION['message'] = $stmt->rowCount() ? 'Post z Facebooka został dodany do ofert.' : 'Ten post jest już w ofertach.';
+            header('Location: index.php#facebook'); exit;
+        }
     } catch (PDOException $e) {
         $error = strpos($e->getMessage(), 'UNIQUE') !== false ? 'Ten adres ogłoszenia jest już zapisany.' : 'Błąd bazy danych. Sprawdź uprawnienia katalogu data/.';
     } catch (Throwable $e) {
@@ -166,12 +187,21 @@ function field(?array $row, string $name, string $fallback = ''): string { retur
     </section>
     <?php endif; ?>
     <div class="summary"><div><span>Zapisane oferty</span><strong><?= count($listings) ?></strong></div><div><span>Próg do sprawdzenia</span><strong>15 000 zł</strong></div><div><span>Priorytet</span><strong>25 000 zł</strong></div></div>
-    <section id="search" class="card"><div class="section-head"><div><p class="eyebrow">ODKRYWANIE</p><h2>Automatycznie znalezione ogłoszenia</h2></div><span class="muted">Od najnowszych · stan i cena do potwierdzenia</span></div>
+    <section id="facebook" class="card"><div class="section-head"><div><p class="eyebrow">ŹRÓDŁO</p><h2>Facebook · Camping i Caravaning Polska</h2></div><a href="https://www.facebook.com/groups/963050657177584/buy_sell_discussion/" target="_blank" rel="noopener noreferrer">Otwórz ogłoszenia w grupie ↗</a></div>
+      <p class="hint">Facebook wymaga zalogowanej sesji, której skaner na serwerze nie ma. Posty dodane poniżej są oznaczone jako Facebook i nie odświeżają się automatycznie. Sprawdź, czy wpis dotyczy sprzedaży kampera, a nie części, wynajmu lub pytania.</p>
+      <form method="post" class="listing-form"><input type="hidden" name="csrf" value="<?= csrf_token($config) ?>">
+        <label class="wide">Link do posta z tej grupy<input type="url" name="facebook_url" required maxlength="2048" placeholder="https://www.facebook.com/groups/963050657177584/posts/..."></label>
+        <label class="wide">Tytuł oferty<input name="facebook_title" required minlength="12" maxlength="180" placeholder="Marka, model i rok kampera"></label>
+        <label>Cena z posta, zł <small>niepotwierdzona</small><input type="number" name="facebook_price" min="1" max="10000000" step="1"></label>
+        <button name="action" value="facebook_add">Dodaj post do ofert</button>
+      </form>
+    </section>
+    <section id="search" class="card"><div class="section-head"><div><p class="eyebrow">ODKRYWANIE</p><h2>Znalezione ogłoszenia</h2></div><span class="muted">Od najnowszych · stan i cena do potwierdzenia</span></div>
       <p class="hint">Porównanie cen korzysta z publicznego eksportu WybierzKampera. Medianę liczymy dla typu, pięcioletniego przedziału roczników i zbliżonego przebiegu; nie uwzględnia stanu, wyposażenia ani kosztu naprawy.</p>
       <?php if (!$scanRuns): ?><p class="hint">Pierwszy skan jeszcze się nie zakończył.</p><?php endif; ?>
       <?php foreach ($scanRuns as $run): ?><p class="hint"><?= h($run['source']) ?>: <?= h($run['scanned_at']) ?> UTC · <?= (int)$run['found'] ?> wyników<?= $run['error'] ? ' · ' . h($run['error']) : '' ?></p><?php endforeach; ?>
       <?php if (!$discoveries): ?><p class="empty">Nie znaleziono jeszcze kandydatów.</p><?php endif; ?>
-      <?php foreach ($discoveries as $result): ?><div class="result"><?php if (!empty($photos[$result['url']])): ?><img class="result-photo" src="<?= h($photos[$result['url']]) ?>" alt="" loading="lazy" referrerpolicy="no-referrer"><?php endif; ?><div><a href="<?= h($result['url']) ?>" target="_blank" rel="noopener noreferrer"><?= h($result['title']) ?></a><p><?= h($result['country']) ?> · <?= h($result['source']) ?><?= $result['price_text'] ? ' · Cena z listy, niepotwierdzona: ' . h($result['price_text']) : '' ?><?= $result['signal'] ? ' · Sygnał: ' . h($result['signal']) : '' ?><?= isset($priceDrops[$result['url']]) ? ' · Obniżka z ' . h($priceDrops[$result['url']]['old_price']) : '' ?> · Wykryto: <?= h($result['first_seen']) ?> UTC</p></div><a class="small-button" href="?analyze=<?= rawurlencode($result['url']) ?>#analysis">Analizuj</a></div><?php endforeach; ?>
+      <?php foreach ($discoveries as $result): ?><div class="result"><?php if (!empty($photos[$result['url']])): ?><img class="result-photo" src="<?= h($photos[$result['url']]) ?>" alt="" loading="lazy" referrerpolicy="no-referrer"><?php endif; ?><div><a href="<?= h($result['url']) ?>" target="_blank" rel="noopener noreferrer"><?= h($result['title']) ?></a><p><?= h($result['country']) ?> · <?= h($result['source']) ?><?= $result['price_text'] ? ' · Cena z wpisu, niepotwierdzona: ' . h($result['price_text']) : '' ?><?= $result['signal'] ? ' · Sygnał: ' . h($result['signal']) : '' ?><?= isset($priceDrops[$result['url']]) ? ' · Obniżka z ' . h($priceDrops[$result['url']]['old_price']) : '' ?> · <?= $result['source'] === 'Facebook' ? 'Dodano ręcznie' : 'Wykryto' ?>: <?= h($result['first_seen']) ?> UTC</p></div><a class="small-button" href="?analyze=<?= rawurlencode($result['url']) ?>#analysis">Analizuj</a></div><?php endforeach; ?>
     </section>
     <section id="form" class="card"><div class="section-head"><div><p class="eyebrow">ANALIZA</p><h2><?= $edit ? 'Edytuj ofertę' : 'Dodaj ofertę' ?></h2></div><?php if ($edit): ?><a href="index.php#form">Nowa oferta</a><?php endif; ?></div>
       <form method="post" class="listing-form"><input type="hidden" name="csrf" value="<?= csrf_token($config) ?>"><input type="hidden" name="id" value="<?= field($edit, 'id') ?>">
