@@ -10,6 +10,8 @@ $db = homes_db();
 $insert = $db->prepare('INSERT OR IGNORE INTO homes (url,source,title,price,area,rooms,street) VALUES (:url,:source,:title,:price,:area,:rooms,:street)');
 $update = $db->prepare('UPDATE homes SET title=:title,price=:price,area=:area,rooms=:rooms,street=:street,last_seen=CURRENT_TIMESTAMP WHERE url=:url');
 $log = $db->prepare('INSERT INTO scans (source,found,added,error) VALUES (?,?,?,?)');
+$oldPrice = $db->prepare('SELECT price FROM homes WHERE url=?');
+$history = $db->prepare('INSERT INTO price_history (url,old_price,new_price) VALUES (?,?,?)');
 $new = [];
 foreach (homes_sources() as $source => $url) {
     $found = 0; $added = 0; $error = '';
@@ -23,13 +25,19 @@ foreach (homes_sources() as $source => $url) {
             if ($insert->rowCount()) {
                 $added++;
                 $duplicate = false;
-                if ($source === 'Morizon') {
-                    $match = $db->prepare("SELECT 1 FROM homes WHERE source='Gratka' AND title=? AND price=? AND area=? LIMIT 1");
-                    $match->execute([$offer['title'], $offer['price'], $offer['area']]);
+                if ($source === 'Morizon' || $source === 'Domiporta') {
+                    $match = $db->prepare("SELECT 1 FROM homes WHERE source<>? AND price=? AND area IS NOT NULL AND ABS(area-?)<0.15 AND rooms=? AND street=? AND street<>'' LIMIT 1");
+                    $match->execute([$source, $offer['price'], $offer['area'], $offer['rooms'], $offer['street']]);
                     $duplicate = (bool)$match->fetchColumn();
                 }
                 if ($previous > 0 && !$duplicate) $new[$offer['url']] = $offer;
             } else {
+                $oldPrice->execute([$offer['url']]);
+                $before = $oldPrice->fetchColumn();
+                if ($before !== false && $before !== null && $offer['price'] !== null && (int)$before !== $offer['price']) {
+                    $history->execute([$offer['url'], (int)$before, $offer['price']]);
+                    if ($offer['price'] < (int)$before) $new[$offer['url']] = ['title' => 'Obniżka ceny: ' . $offer['title'], 'url' => $offer['url']];
+                }
                 $update->execute(array_diff_key($offer, ['source' => true]));
             }
         }
