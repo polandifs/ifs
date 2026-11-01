@@ -28,17 +28,17 @@ function homes_sources(): array {
         'Morizon' => 'https://www.morizon.pl/mieszkania/kwidzyn/',
         'Domiporta' => 'https://www.domiporta.pl/mieszkanie/sprzedam/pomorskie/kwidzyn',
         'GetHome' => 'https://gethome.pl/mieszkania/na-sprzedaz/kwidzyn/',
-        'Lento' => 'https://kwidzyn.lento.pl/nieruchomosci/mieszkania/sprzedaz.html',
         'Sprzedajemy' => 'https://sprzedajemy.pl/kwidzyn/nieruchomosci/mieszkania/sprzedaz',
-        'Szybko' => 'https://www.szybko.pl/l/na-sprzedaz/lokal-mieszkalny/Kwidzyn?inne=ogloszenia',
     ];
 }
 
 function homes_requested_sources(): array {
     return homes_sources() + [
         'OLX' => 'https://www.olx.pl/nieruchomosci/mieszkania/sprzedaz/kwidzyn/',
+        'Lento' => 'https://kwidzyn.lento.pl/nieruchomosci/mieszkania/sprzedaz.html',
         'Okolica' => 'https://www.okolica.pl/mieszkanie/sprzedam/kwidzyn/',
         'Otodom' => 'https://www.otodom.pl/',
+        'Szybko' => 'https://www.szybko.pl/l/na-sprzedaz/lokal-mieszkalny/Kwidzyn?inne=ogloszenia',
         'Tabelaofert' => 'https://tabelaofert.pl/sprzedaz/mieszkania/kwidzyn',
     ];
 }
