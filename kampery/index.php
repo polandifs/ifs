@@ -124,6 +124,7 @@ function field(?array $row, string $name, string $fallback = ''): string { retur
   <?php else: ?>
     <div class="summary"><div><span>Zapisane oferty</span><strong><?= count($listings) ?></strong></div><div><span>Próg do sprawdzenia</span><strong>15 000 zł</strong></div><div><span>Priorytet</span><strong>25 000 zł</strong></div></div>
     <section id="search" class="card"><div class="section-head"><div><p class="eyebrow">ODKRYWANIE</p><h2>Automatycznie znalezione ogłoszenia</h2></div><span class="muted">Skan cykliczny · stan i cena do potwierdzenia</span></div>
+      <p class="hint">Porównanie cen korzysta z publicznego eksportu WybierzKampera. Medianę liczymy dla typu i pięcioletniego przedziału roczników; nie uwzględnia stanu, wyposażenia ani kosztu naprawy.</p>
       <?php if (!$scanRuns): ?><p class="hint">Pierwszy skan jeszcze się nie zakończył.</p><?php endif; ?>
       <?php foreach ($scanRuns as $run): ?><p class="hint"><?= h($run['source']) ?>: <?= h($run['scanned_at']) ?> UTC · <?= (int)$run['found'] ?> wyników<?= $run['error'] ? ' · ' . h($run['error']) : '' ?></p><?php endforeach; ?>
       <?php if (!$discoveries): ?><p class="empty">Nie znaleziono jeszcze kandydatów.</p><?php endif; ?>
