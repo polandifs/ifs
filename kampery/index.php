@@ -110,7 +110,7 @@ if ($logged) {
         $edit = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     }
     $listings = db()->query("SELECT * FROM listings ORDER BY CASE status WHEN 'nowa' THEN 0 WHEN 'sprawdzana' THEN 1 ELSE 2 END, updated_at DESC, id DESC")->fetchAll(PDO::FETCH_ASSOC);
-    $discoveries = db()->query("SELECT * FROM discoveries ORDER BY CASE WHEN signal <> '' THEN 0 ELSE 1 END, first_seen DESC LIMIT 100")->fetchAll(PDO::FETCH_ASSOC);
+    $discoveries = db()->query("SELECT * FROM discoveries ORDER BY first_seen DESC, last_seen DESC LIMIT 100")->fetchAll(PDO::FETCH_ASSOC);
     $photos = [];
     foreach (db()->query("SELECT url,image_url FROM catalog_offers WHERE image_url<>'' AND image_url<>'-'")->fetchAll(PDO::FETCH_ASSOC) as $photo) $photos[$photo['url']] = $photo['image_url'];
     foreach (db()->query("SELECT url,image_url FROM discoveries WHERE image_url<>'' AND image_url<>'-'")->fetchAll(PDO::FETCH_ASSOC) as $photo) $photos[$photo['url']] = $photo['image_url'];
@@ -166,7 +166,7 @@ function field(?array $row, string $name, string $fallback = ''): string { retur
     </section>
     <?php endif; ?>
     <div class="summary"><div><span>Zapisane oferty</span><strong><?= count($listings) ?></strong></div><div><span>Próg do sprawdzenia</span><strong>15 000 zł</strong></div><div><span>Priorytet</span><strong>25 000 zł</strong></div></div>
-    <section id="search" class="card"><div class="section-head"><div><p class="eyebrow">ODKRYWANIE</p><h2>Automatycznie znalezione ogłoszenia</h2></div><span class="muted">Skan cykliczny · stan i cena do potwierdzenia</span></div>
+    <section id="search" class="card"><div class="section-head"><div><p class="eyebrow">ODKRYWANIE</p><h2>Automatycznie znalezione ogłoszenia</h2></div><span class="muted">Od najnowszych · stan i cena do potwierdzenia</span></div>
       <p class="hint">Porównanie cen korzysta z publicznego eksportu WybierzKampera. Medianę liczymy dla typu, pięcioletniego przedziału roczników i zbliżonego przebiegu; nie uwzględnia stanu, wyposażenia ani kosztu naprawy.</p>
       <?php if (!$scanRuns): ?><p class="hint">Pierwszy skan jeszcze się nie zakończył.</p><?php endif; ?>
       <?php foreach ($scanRuns as $run): ?><p class="hint"><?= h($run['source']) ?>: <?= h($run['scanned_at']) ?> UTC · <?= (int)$run['found'] ?> wyników<?= $run['error'] ? ' · ' . h($run['error']) : '' ?></p><?php endforeach; ?>
