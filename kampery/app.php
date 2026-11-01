@@ -62,6 +62,13 @@ function db(): PDO
         added INTEGER NOT NULL DEFAULT 0,
         error TEXT NOT NULL DEFAULT ''
     )");
+    $db->exec("CREATE TABLE IF NOT EXISTS price_drops (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        url TEXT NOT NULL,
+        old_price TEXT NOT NULL,
+        new_price TEXT NOT NULL,
+        detected_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )");
     return $db;
 }
 
