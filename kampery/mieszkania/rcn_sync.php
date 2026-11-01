@@ -43,6 +43,12 @@ try {
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || $area < 15 || $area > 250) continue;
         $transactionId = (string)$ms->TRAN_LOKALNY_ID_IIP;
         if ($transactionId === '') continue;
+        // RCN point coordinates are EPSG:2180 (easting, northing), in metres.
+        $position = trim((string)$ms->GEOMETRIA->children('http://www.opengis.net/gml/3.2')->Point->pos);
+        $coordinates = preg_split('/\s+/', $position);
+        $easting = isset($coordinates[0]) && is_numeric($coordinates[0]) ? (float)$coordinates[0] : null;
+        $northing = isset($coordinates[1]) && is_numeric($coordinates[1]) ? (float)$coordinates[1] : null;
+        if ($easting === null || $northing === null || $easting < 600000 || $easting > 700000 || $northing < 450000 || $northing > 550000) continue;
         $transactionCounts[$transactionId] = ($transactionCounts[$transactionId] ?? 0) + 1;
         $rows[] = [
             'id' => (string)$ms->gid, 'transaction_id' => $transactionId, 'date' => $date,
@@ -51,19 +57,23 @@ try {
             'property_price' => (string)$ms->NIER_CENA_BRUTTO,
             'transaction_price' => (string)$ms->TRAN_CENA_BRUTTO,
             'address' => mb_substr((string)$ms->LOK_ADRES, 0, 200),
+            'easting' => $easting, 'northing' => $northing,
         ];
     }
     $reader->close();
     if (count($rows) < 100) throw new RuntimeException('RCN zwrócił zbyt mało lokali; zachowano poprzednie dane.');
 
     $db = homes_db();
-    $db->exec('CREATE TABLE IF NOT EXISTS rcn_transactions (id TEXT PRIMARY KEY, transaction_id TEXT NOT NULL, sold_at TEXT NOT NULL, price INTEGER NOT NULL, area REAL NOT NULL, price_m2 REAL NOT NULL, market TEXT NOT NULL, address TEXT NOT NULL)');
+    $db->exec('CREATE TABLE IF NOT EXISTS rcn_transactions (id TEXT PRIMARY KEY, transaction_id TEXT NOT NULL, sold_at TEXT NOT NULL, price INTEGER NOT NULL, area REAL NOT NULL, price_m2 REAL NOT NULL, market TEXT NOT NULL, address TEXT NOT NULL, easting REAL, northing REAL)');
+    $columns = array_column($db->query('PRAGMA table_info(rcn_transactions)')->fetchAll(PDO::FETCH_ASSOC), 'name');
+    if (!in_array('easting', $columns, true)) $db->exec('ALTER TABLE rcn_transactions ADD COLUMN easting REAL');
+    if (!in_array('northing', $columns, true)) $db->exec('ALTER TABLE rcn_transactions ADD COLUMN northing REAL');
     $db->exec('CREATE INDEX IF NOT EXISTS rcn_comparables ON rcn_transactions(market,sold_at,area)');
     $db->exec('CREATE TABLE IF NOT EXISTS rcn_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
     $db->beginTransaction();
     try {
         $db->exec('DELETE FROM rcn_transactions');
-        $insert = $db->prepare('INSERT OR IGNORE INTO rcn_transactions (id,transaction_id,sold_at,price,area,price_m2,market,address) VALUES (?,?,?,?,?,?,?,?)');
+        $insert = $db->prepare('INSERT OR IGNORE INTO rcn_transactions (id,transaction_id,sold_at,price,area,price_m2,market,address,easting,northing) VALUES (?,?,?,?,?,?,?,?,?,?)');
         $saved = 0;
         foreach ($rows as $row) {
             $priceText = $row['local_price'] !== '' ? $row['local_price'] : ($row['property_price'] !== '' ? $row['property_price'] : (($transactionCounts[$row['transaction_id']] ?? 0) === 1 ? $row['transaction_price'] : ''));
@@ -71,7 +81,7 @@ try {
             $price = (int)round((float)$priceText);
             $priceM2 = $price / $row['area'];
             if ($price < 50000 || $price > 2000000 || $priceM2 < 1000 || $priceM2 > 50000) continue;
-            $insert->execute([$row['id'], $row['transaction_id'], $row['date'], $price, $row['area'], $priceM2, $row['market'], $row['address']]);
+            $insert->execute([$row['id'], $row['transaction_id'], $row['date'], $price, $row['area'], $priceM2, $row['market'], $row['address'], $row['easting'], $row['northing']]);
             $saved += $insert->rowCount();
         }
         if ($saved < 100) throw new RuntimeException('Za mało prawidłowych cen RCN; zachowano poprzednie dane.');
