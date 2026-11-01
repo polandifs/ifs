@@ -21,6 +21,13 @@ function homes_db(): PDO {
     $db->exec("CREATE INDEX IF NOT EXISTS price_history_url ON price_history(url)");
     $db->exec("CREATE INDEX IF NOT EXISTS offer_events_url_time ON offer_events(url,occurred_at)");
     $db->exec("CREATE TABLE IF NOT EXISTS watched (url TEXT PRIMARY KEY, saved_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, purchase_cost INTEGER NOT NULL DEFAULT 0, renovation INTEGER NOT NULL DEFAULT 0, reserve_cost INTEGER NOT NULL DEFAULT 0, resale_target INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '')");
+    $watchedColumns = $db->query('PRAGMA table_info(watched)')->fetchAll(PDO::FETCH_ASSOC);
+    if (!in_array('purchase_candidate', array_column($watchedColumns, 'name'), true)) {
+        $db->exec("ALTER TABLE watched ADD COLUMN purchase_candidate INTEGER NOT NULL DEFAULT 0");
+    }
+    if (!in_array('candidate_at', array_column($watchedColumns, 'name'), true)) {
+        $db->exec("ALTER TABLE watched ADD COLUMN candidate_at TEXT NOT NULL DEFAULT ''");
+    }
     return $db;
 }
 
