@@ -34,7 +34,7 @@ try {
         if ($feature === false) continue;
         $ms = $feature->children('http://mapserver.gis.umn.edu/mapserver');
         $localId = (string)$ms->LOK_ID_LOKALU;
-        if (!str_starts_with($localId, '220701_1.') || (string)$ms->LOK_FUNKCJA !== 'mieszkalna' || (string)$ms->TRAN_RODZAJ_TRANS !== 'wolnyRynek') continue;
+        if (strpos($localId, '220701_1.') !== 0 || (string)$ms->LOK_FUNKCJA !== 'mieszkalna' || (string)$ms->TRAN_RODZAJ_TRANS !== 'wolnyRynek') continue;
         $date = (string)$ms->DOK_DATA->children('http://www.opengis.net/gml/3.2')->timePosition;
         $area = (float)$ms->LOK_POW_UZYT;
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || $area < 15 || $area > 250) continue;
