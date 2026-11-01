@@ -10,6 +10,8 @@ function homes_db(): PDO {
     $db = new PDO('sqlite:' . $dir . '/mieszkania_kwidzyn.sqlite', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
     $db->exec('PRAGMA busy_timeout=5000');
     $db->exec("CREATE TABLE IF NOT EXISTS homes (url TEXT PRIMARY KEY, source TEXT NOT NULL, title TEXT NOT NULL, price INTEGER, area REAL, rooms INTEGER, street TEXT NOT NULL DEFAULT '', first_seen TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, last_seen TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)");
+    $columns = $db->query('PRAGMA table_info(homes)')->fetchAll(PDO::FETCH_ASSOC);
+    if (!in_array('image_url', array_column($columns, 'name'), true)) $db->exec("ALTER TABLE homes ADD COLUMN image_url TEXT NOT NULL DEFAULT ''");
     $db->exec("CREATE TABLE IF NOT EXISTS scans (id INTEGER PRIMARY KEY, source TEXT NOT NULL, checked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, found INTEGER NOT NULL DEFAULT 0, added INTEGER NOT NULL DEFAULT 0, error TEXT NOT NULL DEFAULT '')");
     $db->exec("CREATE TABLE IF NOT EXISTS subscriptions (endpoint TEXT PRIMARY KEY, public_key TEXT NOT NULL, auth TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, last_sent TEXT NOT NULL DEFAULT '')");
     $db->exec("CREATE TABLE IF NOT EXISTS alerts (id INTEGER PRIMARY KEY, title TEXT NOT NULL, url TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)");
@@ -58,6 +60,7 @@ function homes_offers(string $html, string $source): array {
                         if (!is_array($offer)) continue;
                         $offer['url'] = $item['url'] ?? '';
                         $offer['name'] = $item['name'] ?? '';
+                        $offer['image'] = $item['image'] ?? '';
                         $offers[] = $offer;
                     }
                     break;
@@ -83,9 +86,12 @@ function homes_offers(string $html, string $source): array {
             $price = filter_var($offer['price'] ?? null, FILTER_VALIDATE_FLOAT);
             $area = filter_var($home['floorSize']['value'] ?? null, FILTER_VALIDATE_FLOAT);
             $rooms = filter_var($home['numberOfRooms'] ?? null, FILTER_VALIDATE_INT);
+            $image = $offer['image'] ?? $home['image'] ?? '';
+            if (is_array($image)) $image = $image['url'] ?? $image[0] ?? '';
+            $image = is_string($image) && filter_var($image, FILTER_VALIDATE_URL) && parse_url($image, PHP_URL_SCHEME) === 'https' ? $image : '';
             $out[$url] = ['url' => $url, 'source' => $source, 'title' => mb_substr($title, 0, 180),
                 'price' => $price === false ? null : (int)round($price), 'area' => $area === false ? null : $area,
-                'rooms' => $rooms === false ? null : $rooms, 'street' => mb_substr(trim((string)($address['streetAddress'] ?? '')), 0, 100)];
+                'rooms' => $rooms === false ? null : $rooms, 'street' => mb_substr(trim((string)($address['streetAddress'] ?? '')), 0, 100), 'image_url' => mb_substr($image, 0, 2048)];
         }
     }
     if (!$out) throw new RuntimeException('Nie znaleziono poprawnych ofert; możliwa zmiana strony');
