@@ -3,6 +3,7 @@ declare(strict_types=1);
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 require __DIR__ . '/core.php';
 require __DIR__ . '/push.php';
+require __DIR__ . '/email.php';
 
 $lock = fopen(dirname(__DIR__) . '/data/mieszkania.lock', 'c');
 if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) exit("Skan już trwa\n");
@@ -25,7 +26,7 @@ foreach (homes_sources() as $source => $url) {
             if ($insert->rowCount()) {
                 $added++;
                 $duplicate = false;
-                if ($source === 'Morizon' || $source === 'Domiporta') {
+                if ($source === 'Morizon' || $source === 'Domiporta' || $source === 'Gratka' || $source === 'Nieruchomosci-online') {
                     $match = $db->prepare("SELECT 1 FROM homes WHERE source<>? AND price=? AND area IS NOT NULL AND ABS(area-?)<0.15 AND rooms=? AND street=? AND street<>'' LIMIT 1");
                     $match->execute([$source, $offer['price'], $offer['area'], $offer['rooms'], $offer['street']]);
                     $duplicate = (bool)$match->fetchColumn();
@@ -52,5 +53,6 @@ foreach (homes_sources() as $source => $url) {
 if ($new) {
     $alert = $db->prepare('INSERT INTO alerts (title,url) VALUES (?,?)');
     foreach ($new as $offer) $alert->execute([$offer['title'], $offer['url']]);
+    if (!homes_email_alerts(array_values($new))) error_log('Kwidzyn email: mail() odmówił przyjęcia wiadomości');
     try { homes_push_all($db); } catch (Throwable $e) { error_log('Kwidzyn push: ' . $e->getMessage()); }
 }
