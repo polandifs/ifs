@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 $watched = $db->query("SELECT h.*,w.saved_at,w.purchase_cost,w.renovation,w.reserve_cost,w.resale_target,w.note FROM watched w JOIN homes h ON h.url=w.url ORDER BY CASE WHEN h.title LIKE 'Kwidzyn%' THEN 0 ELSE 1 END,w.saved_at DESC,h.title ASC")->fetchAll(PDO::FETCH_ASSOC);
 $candidates = $db->query("SELECT url,price,area,rooms,street FROM homes WHERE source<>'Adradar' AND price BETWEEN 50000 AND 2000000 AND area BETWEEN 15 AND 250 AND rooms BETWEEN 1 AND 8")->fetchAll(PDO::FETCH_ASSOC);
-$histQuery = $db->prepare('SELECT old_price,new_price,changed_at FROM price_history WHERE url=? ORDER BY id DESC LIMIT 8');
+$histQuery = $db->prepare('SELECT old_price,new_price,changed_at FROM price_history WHERE url=? AND old_price BETWEEN 1 AND 100000000 AND new_price BETWEEN 1 AND 100000000 ORDER BY id DESC LIMIT 8');
 $rcnSynced = $db->query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='rcn_meta'")->fetchColumn()
     ? $db->query("SELECT value FROM rcn_meta WHERE key='synced_at'")->fetchColumn() : false;
 $ranking = [];
