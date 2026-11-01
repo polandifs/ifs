@@ -69,6 +69,28 @@ function db(): PDO
         new_price TEXT NOT NULL,
         detected_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )");
+    $db->exec("CREATE TABLE IF NOT EXISTS catalog_offers (
+        url TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        type TEXT NOT NULL,
+        condition TEXT NOT NULL,
+        brand TEXT NOT NULL,
+        model TEXT NOT NULL,
+        year INTEGER,
+        mileage_km INTEGER,
+        price_pln INTEGER,
+        previous_price_pln INTEGER,
+        price_certainty TEXT NOT NULL DEFAULT '',
+        availability TEXT NOT NULL DEFAULT '',
+        length_m REAL,
+        sleeping_places INTEGER,
+        seller TEXT NOT NULL DEFAULT '',
+        city TEXT NOT NULL DEFAULT '',
+        region TEXT NOT NULL DEFAULT '',
+        checked_at TEXT NOT NULL DEFAULT '',
+        imported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )");
+    $db->exec('CREATE INDEX IF NOT EXISTS catalog_type_price ON catalog_offers(type, price_pln)');
     return $db;
 }
 
