@@ -12,7 +12,7 @@ header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
 if (empty($_SESSION['auth'])) { header('Location: ../index.php'); exit; }
 $db = homes_db();
-$uniqueWhere = "(source <> 'Morizon' OR NOT EXISTS (SELECT 1 FROM homes g WHERE g.source='Gratka' AND g.title=homes.title AND g.price=homes.price AND g.area=homes.area)) AND (source <> 'Domiporta' OR NOT EXISTS (SELECT 1 FROM homes g WHERE g.source<> 'Domiporta' AND g.price=homes.price AND g.area IS NOT NULL AND ABS(g.area-homes.area)<0.15 AND g.rooms=homes.rooms AND g.street=homes.street AND g.street<>''))";
+$uniqueWhere = "source <> 'Adradar' AND (source <> 'Morizon' OR NOT EXISTS (SELECT 1 FROM homes g WHERE g.source='Gratka' AND g.title=homes.title AND g.price=homes.price AND g.area=homes.area)) AND (source <> 'Domiporta' OR NOT EXISTS (SELECT 1 FROM homes g WHERE g.source<> 'Domiporta' AND g.price=homes.price AND g.area IS NOT NULL AND ABS(g.area-homes.area)<0.15 AND g.rooms=homes.rooms AND g.street=homes.street AND g.street<>''))";
 $allHomes = $db->query('SELECT *, (SELECT old_price FROM price_history p WHERE p.url=homes.url ORDER BY id DESC LIMIT 1) previous_price FROM homes WHERE ' . $uniqueWhere . ' ORDER BY first_seen DESC LIMIT 500')->fetchAll(PDO::FETCH_ASSOC);
 $filters = [
     'q' => trim((string)($_GET['q'] ?? '')), 'source' => (string)($_GET['source'] ?? ''),
