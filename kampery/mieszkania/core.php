@@ -13,6 +13,8 @@ function homes_db(): PDO {
     $db->exec("CREATE TABLE IF NOT EXISTS scans (id INTEGER PRIMARY KEY, source TEXT NOT NULL, checked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, found INTEGER NOT NULL DEFAULT 0, added INTEGER NOT NULL DEFAULT 0, error TEXT NOT NULL DEFAULT '')");
     $db->exec("CREATE TABLE IF NOT EXISTS subscriptions (endpoint TEXT PRIMARY KEY, public_key TEXT NOT NULL, auth TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, last_sent TEXT NOT NULL DEFAULT '')");
     $db->exec("CREATE TABLE IF NOT EXISTS alerts (id INTEGER PRIMARY KEY, title TEXT NOT NULL, url TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)");
+    $db->exec("CREATE TABLE IF NOT EXISTS price_history (id INTEGER PRIMARY KEY, url TEXT NOT NULL, old_price INTEGER NOT NULL, new_price INTEGER NOT NULL, changed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)");
+    $db->exec("CREATE INDEX IF NOT EXISTS price_history_url ON price_history(url)");
     return $db;
 }
 
@@ -21,6 +23,7 @@ function homes_sources(): array {
         'Nieruchomosci-online' => 'https://kwidzyn.nieruchomosci-online.pl/mieszkania,sprzedaz/',
         'Gratka' => 'https://gratka.pl/nieruchomosci/mieszkania/kwidzyn/sprzedaz',
         'Morizon' => 'https://www.morizon.pl/mieszkania/kwidzyn/',
+        'Domiporta' => 'https://www.domiporta.pl/mieszkanie/sprzedam/pomorskie/kwidzyn',
     ];
 }
 
@@ -44,16 +47,34 @@ function homes_offers(string $html, string $source): array {
         $data = json_decode($json, true);
         if (!is_array($data)) continue;
         $offers = $data['offers']['offers'] ?? $data['mainEntity']['offers'][0]['offers'] ?? [];
+        if ($source === 'Domiporta') {
+            foreach ($data['@graph'] ?? [] as $node) {
+                if (($node['@type'] ?? '') === 'ItemList') {
+                    $offers = [];
+                    foreach ($node['itemListElement'] ?? [] as $entry) {
+                        $item = $entry['item'] ?? [];
+                        if (!is_array($item)) continue;
+                        $offer = $item['offers'] ?? [];
+                        if (!is_array($offer)) continue;
+                        $offer['url'] = $item['url'] ?? '';
+                        $offer['name'] = $item['name'] ?? '';
+                        $offers[] = $offer;
+                    }
+                    break;
+                }
+            }
+        }
         if (!is_array($offers)) continue;
         foreach ($offers as $offer) {
             if (!is_array($offer)) continue;
             $url = (string)($offer['url'] ?? '');
             $host = strtolower((string)parse_url($url, PHP_URL_HOST));
-            $allowed = ['Nieruchomosci-online' => 'kwidzyn.nieruchomosci-online.pl', 'Gratka' => 'gratka.pl', 'Morizon' => 'www.morizon.pl'];
+            $allowed = ['Nieruchomosci-online' => 'kwidzyn.nieruchomosci-online.pl', 'Gratka' => 'gratka.pl', 'Morizon' => 'www.morizon.pl', 'Domiporta' => 'www.domiporta.pl'];
             if (!isset($allowed[$source]) || $host !== $allowed[$source]) continue;
             if ($source === 'Nieruchomosci-online' && !preg_match('~/mieszkanie[^/]*?/\d+\.html$~', $url)) continue;
             if ($source === 'Gratka' && strpos($url, '/ob/') === false) continue;
             if ($source === 'Morizon' && strpos($url, '/oferta/sprzedaz-mieszkanie-') === false) continue;
+            if ($source === 'Domiporta' && strpos($url, '/nieruchomosci/sprzedam-') === false) continue;
             $home = $offer['itemOffered'] ?? [];
             if (!is_array($home)) continue;
             $address = $home['address'] ?? [];
