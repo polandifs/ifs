@@ -150,7 +150,7 @@ function homes_offers(string $html, string $source): array {
         if (!is_array($data)) continue;
         $offers = $data['offers']['offers'] ?? $data['mainEntity']['offers'][0]['offers'] ?? [];
         if ($source === 'OLX' && ($data['@type'] ?? '') === 'Product') {
-            foreach ($data['offers']['areaServed']['offers'] ?? [] as $offer) {
+            foreach ($data['offers']['offers'] ?? [] as $offer) {
                 if (!is_array($offer) || mb_strtolower((string)($offer['areaServed']['name'] ?? '')) !== 'kwidzyn') continue;
                 $url = (string)($offer['url'] ?? '');
                 if (parse_url($url, PHP_URL_HOST) !== 'www.olx.pl' || strpos($url, '/d/oferta/') === false) continue;
