@@ -80,15 +80,17 @@ function candidates(string $html, array $source): array
         }
         if (mb_strlen($title) < 12 || mb_strlen($title) > 200) continue;
         $body = clean_text($card->textContent);
-        if (preg_match('/\b(gezocht|gesucht|kupię|kupimy|skup|ankauf)\b/ui', $title)) continue;
+        if (preg_match('/\b(gezocht|gesucht|kupię|kupimy|skup|ankauf|aankoop|inkoop|reparatie|naprawa|serwis|service|werkplaats|onderdelen|teile|sloop|verkocht|sprzedany)\b/ui', $title)) continue;
         $signal = '';
-        if (preg_match('/\b(uszkodzony|uszkodzona|powypadkowy|do remontu|zalany|beschädigt|unfall|defekt|reparaturbedürftig|schade|opknapper|defect|accident|ongeval)\b/ui', $title . ' ' . mb_substr($body, 0, 500), $m)) {
+        $signalText = in_array($country, ['NL', 'BE'], true) ? $title : $title . ' ' . mb_substr($body, 0, 500);
+        if (preg_match('/\b(uszkodzony|uszkodzona|powypadkowy|do remontu|zalany|beschädigt|unfall|defekt|reparaturbedürftig|schade|opknapper|defect|accident|ongeval)\b/ui', $signalText, $m)) {
             $signal = mb_strtolower($m[0]);
         }
+        if ($signal === '') continue;
         // Search pages can include unrelated promoted ads. Require a relevant vehicle term.
         if (!preg_match('/kamper|camper|wohnmobil|wohnwagen|przyczep|caravan/ui', $title . ' ' . mb_substr($body, 0, 250))) continue;
         $price = '';
-        if (preg_match('/(?<!\d)(?:\d{1,3}(?:[ .\x{00A0}]\d{3})+|\d{4,7})(?:,\d{2})?\s?(?:zł|PLN|€|EUR)/u', $body, $m)) $price = clean_text($m[0]);
+        if (in_array($country, ['PL', 'DE'], true) && preg_match('/(?<!\d)(?:\d{1,3}(?:[ .\x{00A0}]\d{3})+|\d{4,7})(?:,\d{2})?\s?(?:zł|PLN|€|EUR)/u', $body, $m)) $price = clean_text($m[0]);
         $found[$url] = ['url' => $url, 'title' => mb_substr($title, 0, 180), 'country' => $country,
             'source' => $name, 'price_text' => $price, 'signal' => $signal];
         if (count($found) >= 60) break;
@@ -98,6 +100,8 @@ function candidates(string $html, array $source): array
 
 $database = db();
 $insert = $database->prepare('INSERT OR IGNORE INTO discoveries (url,title,country,source,price_text,signal) VALUES (:url,:title,:country,:source,:price_text,:signal)');
+$previous = $database->prepare('SELECT price_text FROM discoveries WHERE url = ?');
+$drop = $database->prepare('INSERT INTO price_drops (url,old_price,new_price) VALUES (?,?,?)');
 $update = $database->prepare('UPDATE discoveries SET last_seen = CURRENT_TIMESTAMP, title = :title, price_text = :price_text, signal = :signal WHERE url = :url');
 $log = $database->prepare('INSERT INTO scan_runs (source,found,added,error) VALUES (?,?,?,?)');
 foreach ($sources as $source) {
@@ -106,8 +110,17 @@ foreach ($sources as $source) {
         $items = candidates(fetch_page($source[2]), $source);
         $found = count($items);
         foreach ($items as $item) {
+            $previous->execute([$item['url']]);
+            $old = $previous->fetchColumn();
             $insert->execute($item);
             $added += $insert->rowCount();
+            if (is_string($old) && $old !== '' && $item['price_text'] !== '' && $old !== $item['price_text']) {
+                $oldNumber = (float)str_replace([',', '.', ' '], ['', '', ''], preg_replace('/[^\d., ]/', '', $old));
+                $newNumber = (float)str_replace([',', '.', ' '], ['', '', ''], preg_replace('/[^\d., ]/', '', $item['price_text']));
+                if ($newNumber > 0 && $newNumber < $oldNumber && (strpos($old, '€') !== false) === (strpos($item['price_text'], '€') !== false)) {
+                    $drop->execute([$item['url'], $old, $item['price_text']]);
+                }
+            }
             $update->execute(['url' => $item['url'], 'title' => $item['title'],
                 'price_text' => $item['price_text'], 'signal' => $item['signal']]);
         }
