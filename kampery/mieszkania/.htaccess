@@ -1,0 +1,4 @@
+Options -Indexes
+<FilesMatch "^(core\.php|push\.php|push-config\.php|monitor\.php)$">
+  Require all denied
+</FilesMatch>
