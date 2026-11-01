@@ -14,10 +14,22 @@ $log = $db->prepare('INSERT INTO scans (source,found,added,error) VALUES (?,?,?,
 $oldPrice = $db->prepare('SELECT price FROM homes WHERE url=?');
 $history = $db->prepare('INSERT INTO price_history (url,old_price,new_price) VALUES (?,?,?)');
 $new = [];
+$baselineOlxPages = in_array('--baseline-olx-pages', $argv, true);
 foreach (homes_sources() as $source => $url) {
     $found = 0; $added = 0; $error = '';
     try {
         $offers = homes_offers(homes_fetch($url), $source);
+        $firstPageUrls = array_fill_keys(array_column($offers, 'url'), true);
+        if ($source === 'OLX') {
+            // OLX mixes Kwidzyn results with nearby towns; stop once a page has no Kwidzyn offers.
+            for ($page = 2; $page <= 5; $page++) {
+                try { $pageOffers = homes_html_offers(homes_fetch($url . '?page=' . $page), $source); }
+                catch (Throwable $e) { break; }
+                if (!$pageOffers) break;
+                $offers = array_merge($offers, $pageOffers);
+            }
+            $offers = array_values(array_column($offers, null, 'url'));
+        }
         $found = count($offers);
         $previous = (int)$db->query("SELECT COUNT(*) FROM scans WHERE source = " . $db->quote($source) . " AND error = ''")->fetchColumn();
         $db->beginTransaction();
@@ -31,7 +43,7 @@ foreach (homes_sources() as $source => $url) {
                     $match->execute([$source, $offer['price'], $offer['area'], $offer['rooms'], $offer['street']]);
                     $duplicate = (bool)$match->fetchColumn();
                 }
-                if ($previous > 0 && !$duplicate) $new[$offer['url']] = $offer;
+                if ($previous > 0 && !$duplicate && !($baselineOlxPages && $source === 'OLX' && !isset($firstPageUrls[$offer['url']]))) $new[$offer['url']] = $offer;
             } else {
                 $oldPrice->execute([$offer['url']]);
                 $before = $oldPrice->fetchColumn();
