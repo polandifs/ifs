@@ -18,6 +18,7 @@ if (empty($_SESSION['auth'])) {
 
 $view = (string)($_GET['view'] ?? 'all');
 if (!in_array($view, ['all', 'campers', 'homes'], true)) $view = 'all';
+$perModuleLimit = $view === 'all' ? 6 : 12;
 $offers = [];
 $errors = [];
 $camperCount = 0;
@@ -29,7 +30,7 @@ try {
     $camperCount = (int)$camperDb->query('SELECT COUNT(*) FROM discoveries')->fetchColumn();
     $camperScan = (string)$camperDb->query('SELECT MAX(scanned_at) FROM scan_runs')->fetchColumn();
     if ($view !== 'homes') {
-        $rows = $camperDb->query('SELECT url, title, source, price_text, image_url, first_seen FROM discoveries ORDER BY first_seen DESC LIMIT 12')->fetchAll(PDO::FETCH_ASSOC);
+        $rows = $camperDb->query('SELECT url, title, source, price_text, image_url, first_seen FROM discoveries ORDER BY first_seen DESC LIMIT ' . $perModuleLimit)->fetchAll(PDO::FETCH_ASSOC);
         foreach ($rows as $row) {
             $offers[] = [
                 'kind' => 'camper', 'url' => (string)$row['url'], 'title' => (string)$row['title'],
@@ -47,7 +48,7 @@ try {
     $homeCount = (int)$homeDb->query('SELECT COUNT(*) FROM homes')->fetchColumn();
     $homeScan = (string)$homeDb->query('SELECT MAX(checked_at) FROM scans')->fetchColumn();
     if ($view !== 'campers') {
-        $rows = $homeDb->query('SELECT url, title, source, price, image_url, first_seen FROM homes ORDER BY first_seen DESC LIMIT 12')->fetchAll(PDO::FETCH_ASSOC);
+        $rows = $homeDb->query('SELECT url, title, source, price, image_url, first_seen FROM homes ORDER BY first_seen DESC LIMIT ' . $perModuleLimit)->fetchAll(PDO::FETCH_ASSOC);
         foreach ($rows as $row) {
             $offers[] = [
                 'kind' => 'home', 'url' => (string)$row['url'], 'title' => (string)$row['title'],
