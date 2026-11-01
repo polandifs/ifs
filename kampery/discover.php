@@ -99,7 +99,13 @@ function candidates(string $html, array $source): array
     return array_values($found);
 }
 
-function reference_candidates(string $csv): array
+function csv_number(string $value): ?int
+{
+    $digits = preg_replace('/\D/u', '', $value);
+    return $digits === '' ? null : (int)$digits;
+}
+
+function reference_candidates(string $csv, PDO $database): array
 {
     $stream = fopen('php://temp', 'w+');
     fwrite($stream, $csv);
@@ -109,10 +115,29 @@ function reference_candidates(string $csv): array
     $header = array_map(static function ($x) { return trim(str_replace("\xEF\xBB\xBF", '', $x)); }, $header);
     $required = ['Stan', 'Typ', 'Marka', 'Model', 'Rok', 'Przebieg km', 'Cena zł brutto', 'Pewność ceny', 'Link do ogłoszenia'];
     if (array_diff($required, $header)) throw new RuntimeException('Zmieniły się kolumny CSV');
-    $rows = []; $groups = [];
+    $rows = []; $groups = []; $catalog = [];
     while (($values = fgetcsv($stream, 0, ';')) !== false) {
         if (count($values) !== count($header)) continue;
         $r = array_combine($header, $values);
+        $url = trim($r['Link do ogłoszenia']);
+        if (filter_var($url, FILTER_VALIDATE_URL) && strtolower((string)parse_url($url, PHP_URL_SCHEME)) === 'https') {
+            $length = str_replace(',', '.', trim($r['Długość m'] ?? ''));
+            $catalog[$url] = [
+                'url' => $url,
+                'title' => mb_substr(clean_text(trim($r['Marka'] . ' ' . $r['Model'])), 0, 180),
+                'type' => trim($r['Typ']), 'condition' => trim($r['Stan']),
+                'brand' => trim($r['Marka']), 'model' => trim($r['Model']),
+                'year' => csv_number($r['Rok']), 'mileage_km' => csv_number($r['Przebieg km']),
+                'price_pln' => csv_number($r['Cena zł brutto']),
+                'previous_price_pln' => csv_number($r['Wcześniejsza cena zł'] ?? ''),
+                'price_certainty' => trim($r['Pewność ceny']),
+                'availability' => trim($r['Dostępność'] ?? ''),
+                'length_m' => is_numeric($length) ? (float)$length : null,
+                'sleeping_places' => csv_number($r['Miejsca spanie'] ?? ''),
+                'seller' => trim($r['Sprzedawca'] ?? ''), 'city' => trim($r['Miasto'] ?? ''),
+                'region' => trim($r['Województwo'] ?? ''), 'checked_at' => trim($r['Sprawdzono'] ?? ''),
+            ];
+        }
         if (mb_strtolower(trim($r['Stan'])) !== 'używany') continue;
         if (mb_strtolower(trim($r['Pewność ceny'])) !== 'potwierdzona') continue;
         $year = (int)$r['Rok'];
@@ -126,6 +151,20 @@ function reference_candidates(string $csv): array
         $groups[$key][] = [$price, $km];
     }
     fclose($stream);
+    if (count($catalog) < 100) throw new RuntimeException('Eksport zawiera zbyt mało poprawnych ofert');
+    $columns = array_keys(reset($catalog));
+    $sql = 'INSERT INTO catalog_offers (' . implode(',', $columns) . ') VALUES (:' . implode(',:', $columns) . ') ON CONFLICT(url) DO UPDATE SET ';
+    $sql .= implode(',', array_map(static fn($column) => "$column = excluded.$column", array_slice($columns, 1)));
+    $sql .= ', imported_at = CURRENT_TIMESTAMP';
+    $upsert = $database->prepare($sql);
+    $database->beginTransaction();
+    try {
+        foreach ($catalog as $offer) $upsert->execute($offer);
+        $database->commit();
+    } catch (Throwable $e) {
+        $database->rollBack();
+        throw $e;
+    }
     $out = [];
     foreach ($rows as [$r, $price, $key, $km]) {
         $prices = [];
@@ -161,7 +200,7 @@ foreach ($sources as $source) {
         if ($source[1] === 'WybierzKampera') {
             $last = $database->query("SELECT scanned_at FROM scan_runs WHERE source = 'WybierzKampera' AND error = '' ORDER BY id DESC LIMIT 1")->fetchColumn();
             if (is_string($last) && strtotime($last . ' UTC') > time() - 20 * 3600) continue;
-            $items = reference_candidates(fetch_page($source[2]));
+            $items = reference_candidates(fetch_page($source[2]), $database);
         } else {
             $items = candidates(fetch_page($source[2]), $source);
         }
