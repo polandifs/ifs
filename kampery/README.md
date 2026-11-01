@@ -24,11 +24,11 @@ Plik `config.php` i katalog `data/` są blokowane przez reguły `.htaccess`. Prz
 
 - Ręczne zapisywanie ofert z usuwaniem duplikatów po adresie URL.
 - Cykliczne sprawdzanie publicznych stron wyszukiwania Otomoto, Kleinanzeigen, Marktplaats i 2dehands w PL, DE, NL i BE. Dodatkowo najwyżej raz na 20 godzin analizowany jest publiczny eksport CSV WybierzKampera: oferty używane co najmniej 30% poniżej mediany tego samego typu, pięcioletniej grupy roczników i zbliżonego przebiegu są tropami do sprawdzenia. Skan zapisuje nowe linki, datę wykrycia, sygnał uszkodzenia i obniżkę ceny, gdy da się porównać odczyty. Wyniki nie potwierdzają dostępności, stanu, ceny ani zysku.
-- Grupa Facebook „Camping i Caravaning Polska” jest podłączona jako źródło do ręcznego dodawania postów sprzedażowych. Serwer otrzymuje stronę logowania zamiast wpisów grupy, dlatego nie ma automatycznego odświeżania ofert Facebooka. Posty są oznaczane jako dodane ręcznie, osobno od wyników skanu.
+- `facebook_groups.php` pozwala dodawać adresy grup, włączać i wyłączać ich sprawdzanie oraz zapisywać bezpośrednie linki do postów. Na początek są zapisane trzy grupy: Camping i Caravaning Polska, Kampery PL oraz Kampery i Kampervany na Sprzedaż. `facebook_group_scan.php` jest wywoływany przez obecny skan kamperów co 3 godziny. Odczytuje wyłącznie posty sprzedażowe dostępne w publicznym HTML, bez ciasteczek logowania. Zapisuje status każdego źródła; jeśli Facebook kieruje serwer do logowania, nie zapisuje żadnych domniemanych ofert. Test serwera 1 listopada 2026 dla dwóch nowych grup skończył się przekierowaniem do logowania, więc ich automatyczny import jest obecnie zablokowany przez Facebooka. Ręcznie dodane posty są oznaczone osobno od wyników skanu.
 - Kalkulacja przy cenie ofertowej i przy zakładanej negocjacji, z kosztami naprawy, transportu i rezerwą.
 - Oznaczenie scenariusza jako „do sprawdzenia”, gdy szacowana nadwyżka wynosi co najmniej 15 tys. zł; priorytet od 25 tys. zł.
 
-Skan działa w harmonogramie serwera i pokazuje ostatni wynik każdego źródła. Portale mogą zmieniać układ stron lub blokować automatyczne pobieranie; błąd źródła jest wtedy widoczny w panelu. Link z prywatnej grupy można zapisać ręcznie.
+Skan działa w harmonogramie serwera i pokazuje ostatni wynik każdego źródła. Portale mogą zmieniać układ stron lub blokować automatyczne pobieranie; błąd źródła jest wtedy widoczny w panelu. Link do posta z grupy niedostępnej dla serwera można zapisać ręcznie.
 
 ## Mieszkania Kwidzyn: ceny transakcyjne RCN
 
