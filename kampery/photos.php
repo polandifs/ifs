@@ -27,7 +27,7 @@ function photo_url(string $html, bool $reference): string {
 }
 
 $count = 0;
-$rows = $database->query("SELECT url,reference_url FROM catalog_offers WHERE image_url='' AND reference_url LIKE 'https://wybierzkampera.pl/oferta/%' ORDER BY price_pln ASC LIMIT 24")->fetchAll(PDO::FETCH_ASSOC);
+$rows = $database->query("SELECT c.url,c.reference_url FROM catalog_offers c WHERE c.image_url='' AND c.reference_url LIKE 'https://wybierzkampera.pl/oferta/%' ORDER BY CASE WHEN EXISTS (SELECT 1 FROM discoveries d WHERE d.url=c.url) THEN 0 ELSE 1 END, c.price_pln ASC LIMIT 24")->fetchAll(PDO::FETCH_ASSOC);
 $saveCatalog = $database->prepare('UPDATE catalog_offers SET image_url=? WHERE url=?');
 foreach ($rows as $row) {
     if (parse_url($row['reference_url'], PHP_URL_HOST) !== 'wybierzkampera.pl') continue;
