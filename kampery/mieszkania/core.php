@@ -16,6 +16,7 @@ function homes_db(): PDO {
     $db->exec("CREATE TABLE IF NOT EXISTS subscriptions (endpoint TEXT PRIMARY KEY, public_key TEXT NOT NULL, auth TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, last_sent TEXT NOT NULL DEFAULT '')");
     $db->exec("CREATE TABLE IF NOT EXISTS alerts (id INTEGER PRIMARY KEY, title TEXT NOT NULL, url TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)");
     $db->exec("CREATE TABLE IF NOT EXISTS price_history (id INTEGER PRIMARY KEY, url TEXT NOT NULL, old_price INTEGER NOT NULL, new_price INTEGER NOT NULL, changed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)");
+    $db->exec("CREATE TABLE IF NOT EXISTS image_attempts (url TEXT PRIMARY KEY, attempted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)");
     $db->exec("CREATE INDEX IF NOT EXISTS price_history_url ON price_history(url)");
     $db->exec("CREATE TABLE IF NOT EXISTS watched (url TEXT PRIMARY KEY, saved_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, purchase_cost INTEGER NOT NULL DEFAULT 0, renovation INTEGER NOT NULL DEFAULT 0, reserve_cost INTEGER NOT NULL DEFAULT 0, resale_target INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '')");
     return $db;
@@ -158,6 +159,24 @@ function homes_fetch(string $url): string {
     curl_close($ch);
     if (!is_string($body) || $status !== 200 || strlen($body) < 1000) throw new RuntimeException('HTTP ' . $status . ' lub pusta odpowiedź');
     return $body;
+}
+
+function homes_detail_image(string $url): string {
+    if (parse_url($url, PHP_URL_HOST) !== 'www.olx.pl' || strpos($url, '/d/oferta/') === false) return '';
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_MAXREDIRS => 2,
+        CURLOPT_TIMEOUT => 7, CURLOPT_CONNECTTIMEOUT => 3, CURLOPT_ENCODING => '',
+        CURLOPT_USERAGENT => 'Mozilla/5.0 (compatible; IFSKwidzynMonitor/1.0)']);
+    $html = curl_exec($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if (!is_string($html) || $status !== 200) return '';
+    if (!preg_match('~<meta[^>]*property=["\']og:image["\'][^>]*>~i', $html, $tag)) return '';
+    if (!preg_match('~content=["\']([^"\']+)["\']~i', $tag[0], $match)) return '';
+    $image = html_entity_decode($match[1], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $host = strtolower((string)parse_url($image, PHP_URL_HOST));
+    return filter_var($image, FILTER_VALIDATE_URL) && parse_url($image, PHP_URL_SCHEME) === 'https'
+        && ($host === 'olxcdn.com' || substr($host, -11) === '.olxcdn.com') ? mb_substr($image, 0, 2048) : '';
 }
 
 function homes_offers(string $html, string $source): array {
