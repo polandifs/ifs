@@ -29,16 +29,21 @@ if ($home['source'] === 'Adradar' && $db->query("SELECT COUNT(*) FROM sqlite_mas
 $prices = $db->prepare('SELECT old_price,new_price,changed_at,id FROM price_history WHERE url=? ORDER BY id DESC LIMIT 100');
 $prices->execute([$url]);
 $priceChanges = $prices->fetchAll(PDO::FETCH_ASSOC);
-$events = $db->prepare('SELECT kind,old_value,new_value,occurred_at,id FROM offer_events WHERE url=? ORDER BY id DESC LIMIT 100');
+$events = $db->prepare('SELECT kind,old_value,new_value,occurred_at,id FROM offer_events WHERE url=? ORDER BY id DESC LIMIT 1000');
 $events->execute([$url]);
 $fieldChanges = $events->fetchAll(PDO::FETCH_ASSOC);
 $timeline = [];
 foreach ($priceChanges as $change) $timeline[] = [
     'time' => $change['changed_at'], 'kind' => 'price', 'old' => $change['old_price'], 'new' => $change['new_price'], 'id' => $change['id']
 ];
-foreach ($fieldChanges as $change) $timeline[] = [
-    'time' => $change['occurred_at'], 'kind' => $change['kind'], 'old' => $change['old_value'], 'new' => $change['new_value'], 'id' => $change['id']
-];
+foreach ($fieldChanges as $change) {
+    // Older scans logged formatting differences such as 45.0 -> 45 as area changes.
+    if (in_array($change['kind'], ['area', 'rooms'], true) && is_numeric($change['old_value']) && is_numeric($change['new_value'])
+        && abs((float)$change['old_value'] - (float)$change['new_value']) <= 0.001) continue;
+    $timeline[] = [
+        'time' => $change['occurred_at'], 'kind' => $change['kind'], 'old' => $change['old_value'], 'new' => $change['new_value'], 'id' => $change['id']
+    ];
+}
 usort($timeline, static fn(array $a, array $b): int => strcmp($b['time'], $a['time']) ?: ($b['id'] <=> $a['id']));
 $initialPrice = $db->prepare('SELECT old_price FROM price_history WHERE url=? ORDER BY id ASC LIMIT 1');
 $initialPrice->execute([$url]);
