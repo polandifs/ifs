@@ -29,6 +29,9 @@ try {
     $rows = [];
     $transactionCounts = [];
     while ($reader->read()) {
+        if ($reader->nodeType === XMLReader::ELEMENT && $reader->localName === 'FeatureCollection' && $reader->getAttribute('next')) {
+            throw new RuntimeException('WFS RCN zwrócił niepełną stronę wyników; zachowano poprzednie dane.');
+        }
         if ($reader->nodeType !== XMLReader::ELEMENT || $reader->localName !== 'lokale' || $reader->namespaceURI !== 'http://mapserver.gis.umn.edu/mapserver') continue;
         $feature = simplexml_load_string($reader->readOuterXML(), SimpleXMLElement::class, LIBXML_NONET);
         if ($feature === false) continue;
