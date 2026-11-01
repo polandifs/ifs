@@ -1,4 +1,5 @@
 Options -Indexes
+DirectoryIndex panel.php index.php
 <FilesMatch "^(config\.php|config\.example\.php|app\.php|README\.md)$">
   Require all denied
 </FilesMatch>
