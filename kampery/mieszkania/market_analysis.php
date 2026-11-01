@@ -23,17 +23,17 @@ function market_listing_summary(PDO $db, float $area, ?int $rooms = null, string
     $values = []; $seen = []; $examples = [];
     foreach ($query->fetchAll(PDO::FETCH_ASSOC) as $row) {
         if ($row['url'] === $excludeUrl) continue;
-        if ($buildingType !== '') {
-            $candidateType = market_building_type((string)$row['title']);
-            if ($candidateType === '') { ++$empty['unknown_building']; continue; }
-            if ($candidateType !== $buildingType) { ++$empty['other_building']; continue; }
-        }
         // The same flat can appear under another portal URL. An exact price and near-identical
         // area are a conservative duplicate signal when valuing a known listing.
         if ($excludeUrl !== '' && $excludePrice !== null && $excludeArea !== null
             && (int)$row['price'] === $excludePrice && abs((float)$row['area'] - $excludeArea) <= .1) {
             ++$empty['probable_duplicates'];
             continue;
+        }
+        if ($buildingType !== '') {
+            $candidateType = market_building_type((string)$row['title']);
+            if ($candidateType === '') { ++$empty['unknown_building']; continue; }
+            if ($candidateType !== $buildingType) { ++$empty['other_building']; continue; }
         }
         $signature = (int)$row['price'] . '|' . round((float)$row['area'], 1) . '|' . (int)$row['rooms'] . '|' . valuation_street((string)$row['street']);
         if (isset($seen[$signature])) continue;
