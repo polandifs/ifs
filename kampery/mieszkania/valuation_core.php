@@ -7,6 +7,8 @@ function valuation_street(string $value): string {
     $value = strtr($value, ['ą'=>'a','ć'=>'c','ę'=>'e','ł'=>'l','ń'=>'n','ó'=>'o','ś'=>'s','ź'=>'z','ż'=>'z']);
     $value = preg_replace('/^\s*(ulica|ul)\s+/u', '', $value);
     $value = preg_replace('/[^a-z0-9]+/u', ' ', $value);
+    // A user can enter a building number; RCN stores it separately from UL.
+    $value = preg_replace('/\s+\d+[a-z]?(?:\s+\d+)?$/u', '', $value);
     return trim((string)$value);
 }
 
