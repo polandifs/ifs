@@ -38,7 +38,7 @@ function homes_requested_sources(): array {
     return homes_sources() + [
         'Lento' => 'https://kwidzyn.lento.pl/nieruchomosci/mieszkania/sprzedaz.html',
         'Okolica' => 'https://www.okolica.pl/mieszkanie/sprzedam/kwidzyn/',
-        'Otodom' => 'https://www.otodom.pl/',
+        'Otodom' => 'https://www.otodom.pl/pl/wyniki/sprzedaz/mieszkanie/pomorskie/kwidzyn/kwidzyn/kwidzyn',
         'Szybko' => 'https://www.szybko.pl/l/na-sprzedaz/lokal-mieszkalny/Kwidzyn?inne=ogloszenia',
         'Tabelaofert' => 'https://tabelaofert.pl/sprzedaz/mieszkania/kwidzyn',
     ];
