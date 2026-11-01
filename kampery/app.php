@@ -10,8 +10,8 @@ function config(): array
     }
     $config = require $file;
     if (!is_array($config) || empty($config['app_key']) || empty($config['password_hash'])
-        || str_starts_with((string)$config['app_key'], 'REPLACE_')
-        || str_starts_with((string)$config['password_hash'], 'REPLACE_')) {
+        || strpos((string)$config['app_key'], 'REPLACE_') === 0
+        || strpos((string)$config['password_hash'], 'REPLACE_') === 0) {
         http_response_code(503);
         exit('Uzupełnij config.php zgodnie z README.md.');
     }
