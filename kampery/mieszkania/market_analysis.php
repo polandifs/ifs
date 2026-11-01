@@ -3,26 +3,31 @@ declare(strict_types=1);
 require_once __DIR__ . '/valuation_core.php';
 
 function market_listing_summary(PDO $db, float $area, ?int $rooms = null, string $excludeUrl = ''): array {
-    $empty = ['available'=>false, 'count'=>0, 'median'=>null, 'low'=>null, 'high'=>null,
+    $empty = ['available'=>false, 'count'=>0, 'median'=>null, 'low'=>null, 'high'=>null, 'examples'=>[],
         'price_m2'=>null, 'scope'=>'Oferty z Kwidzyna · metraż ±20%' . ($rooms ? ' · ' . $rooms . ' pok.' : ''),
         'reason'=>'too_few'];
     if ($area < 15 || $area > 250) return $empty;
     $since = gmdate('Y-m-d H:i:s', strtotime('-30 days'));
-    $sql = "SELECT url,source,price,area,rooms,street FROM homes WHERE source<>'Adradar' AND price BETWEEN 50000 AND 2000000 AND area BETWEEN ? AND ? AND last_seen>=?";
+    $sql = "SELECT url,source,title,price,area,rooms,street,last_seen FROM homes WHERE source<>'Adradar' AND price BETWEEN 50000 AND 2000000 AND area BETWEEN ? AND ? AND last_seen>=?";
     $params = [$area * 0.8, $area * 1.2, $since];
     if ($rooms !== null && $rooms > 0) { $sql .= ' AND rooms=?'; $params[] = $rooms; }
     $query = $db->prepare($sql);
     $query->execute($params);
-    $values = []; $seen = [];
+    $values = []; $seen = []; $examples = [];
     foreach ($query->fetchAll(PDO::FETCH_ASSOC) as $row) {
         if ($row['url'] === $excludeUrl) continue;
         $signature = (int)$row['price'] . '|' . round((float)$row['area'], 1) . '|' . (int)$row['rooms'] . '|' . valuation_street((string)$row['street']);
         if (isset($seen[$signature])) continue;
         $seen[$signature] = true;
         $values[] = (float)$row['price'] / (float)$row['area'];
+        $examples[] = $row;
     }
     sort($values, SORT_NUMERIC);
     $empty['count'] = count($values);
+    usort($examples, static fn(array $a, array $b): int =>
+        abs((float)$a['area'] - $area) <=> abs((float)$b['area'] - $area)
+        ?: strcmp((string)$b['last_seen'], (string)$a['last_seen']));
+    $empty['examples'] = array_slice($examples, 0, 8);
     if (count($values) < 5) return $empty;
     $money = static fn(float $p): int => (int)(round($p * $area / 1000) * 1000);
     return array_merge($empty, ['available'=>true, 'reason'=>'',
