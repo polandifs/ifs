@@ -153,13 +153,16 @@ function reference_candidates(string $csv, PDO $database): array
     fclose($stream);
     if (count($catalog) < 100) throw new RuntimeException('Eksport zawiera zbyt mało poprawnych ofert');
     $columns = array_keys(reset($catalog));
-    $sql = 'INSERT INTO catalog_offers (' . implode(',', $columns) . ') VALUES (:' . implode(',:', $columns) . ') ON CONFLICT(url) DO UPDATE SET ';
+    $sql = 'INSERT INTO catalog_offers (' . implode(',', $columns) . ',imported_at) VALUES (:' . implode(',:', $columns) . ',:imported_at) ON CONFLICT(url) DO UPDATE SET ';
     $sql .= implode(',', array_map(static fn($column) => "$column = excluded.$column", array_slice($columns, 1)));
-    $sql .= ', imported_at = CURRENT_TIMESTAMP';
+    $sql .= ', imported_at = excluded.imported_at';
     $upsert = $database->prepare($sql);
+    $batch = gmdate('Y-m-d H:i:s');
     $database->beginTransaction();
     try {
-        foreach ($catalog as $offer) $upsert->execute($offer);
+        foreach ($catalog as $offer) { $offer['imported_at'] = $batch; $upsert->execute($offer); }
+        $prune = $database->prepare('DELETE FROM catalog_offers WHERE imported_at <> ?');
+        $prune->execute([$batch]);
         $database->commit();
     } catch (Throwable $e) {
         $database->rollBack();
