@@ -88,6 +88,7 @@ $edit = null;
 $listings = [];
 $discoveries = [];
 $scanRuns = [];
+$priceDrops = [];
 if ($logged) {
     $editId = filter_var($_GET['edit'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
     if ($editId) {
@@ -98,6 +99,9 @@ if ($logged) {
     $listings = db()->query("SELECT * FROM listings ORDER BY CASE status WHEN 'nowa' THEN 0 WHEN 'sprawdzana' THEN 1 ELSE 2 END, updated_at DESC, id DESC")->fetchAll(PDO::FETCH_ASSOC);
     $discoveries = db()->query("SELECT * FROM discoveries ORDER BY CASE WHEN signal <> '' THEN 0 ELSE 1 END, first_seen DESC LIMIT 100")->fetchAll(PDO::FETCH_ASSOC);
     $scanRuns = db()->query("SELECT r.* FROM scan_runs r JOIN (SELECT source, MAX(id) id FROM scan_runs GROUP BY source) latest ON r.id = latest.id ORDER BY r.source")->fetchAll(PDO::FETCH_ASSOC);
+    foreach (db()->query('SELECT * FROM price_drops ORDER BY id DESC LIMIT 100')->fetchAll(PDO::FETCH_ASSOC) as $drop) {
+        if (!isset($priceDrops[$drop['url']])) $priceDrops[$drop['url']] = $drop;
+    }
 }
 
 function field(?array $row, string $name, string $fallback = ''): string { return h(isset($row[$name]) ? (string)$row[$name] : $fallback); }
@@ -123,7 +127,7 @@ function field(?array $row, string $name, string $fallback = ''): string { retur
       <?php if (!$scanRuns): ?><p class="hint">Pierwszy skan jeszcze się nie zakończył.</p><?php endif; ?>
       <?php foreach ($scanRuns as $run): ?><p class="hint"><?= h($run['source']) ?>: <?= h($run['scanned_at']) ?> UTC · <?= (int)$run['found'] ?> wyników<?= $run['error'] ? ' · ' . h($run['error']) : '' ?></p><?php endforeach; ?>
       <?php if (!$discoveries): ?><p class="empty">Nie znaleziono jeszcze kandydatów.</p><?php endif; ?>
-      <?php foreach ($discoveries as $result): ?><div class="result"><div><a href="<?= h($result['url']) ?>" target="_blank" rel="noopener noreferrer"><?= h($result['title']) ?></a><p><?= h($result['country']) ?> · <?= h($result['source']) ?><?= $result['price_text'] ? ' · Cena z listy: ' . h($result['price_text']) : '' ?><?= $result['signal'] ? ' · Sygnał: ' . h($result['signal']) : '' ?> · Wykryto: <?= h($result['first_seen']) ?> UTC</p></div><a class="small-button" href="?add_url=<?= rawurlencode($result['url']) ?>&amp;add_title=<?= rawurlencode($result['title']) ?>&amp;add_country=<?= h($result['country']) ?>#form">Analizuj</a></div><?php endforeach; ?>
+      <?php foreach ($discoveries as $result): ?><div class="result"><div><a href="<?= h($result['url']) ?>" target="_blank" rel="noopener noreferrer"><?= h($result['title']) ?></a><p><?= h($result['country']) ?> · <?= h($result['source']) ?><?= $result['price_text'] ? ' · Cena z listy, niepotwierdzona: ' . h($result['price_text']) : '' ?><?= $result['signal'] ? ' · Sygnał: ' . h($result['signal']) : '' ?><?= isset($priceDrops[$result['url']]) ? ' · Obniżka z ' . h($priceDrops[$result['url']]['old_price']) : '' ?> · Wykryto: <?= h($result['first_seen']) ?> UTC</p></div><a class="small-button" href="?add_url=<?= rawurlencode($result['url']) ?>&amp;add_title=<?= rawurlencode($result['title']) ?>&amp;add_country=<?= h($result['country']) ?>#form">Analizuj</a></div><?php endforeach; ?>
     </section>
     <section id="form" class="card"><div class="section-head"><div><p class="eyebrow">ANALIZA</p><h2><?= $edit ? 'Edytuj ofertę' : 'Dodaj ofertę' ?></h2></div><?php if ($edit): ?><a href="index.php#form">Nowa oferta</a><?php endif; ?></div>
       <form method="post" class="listing-form"><input type="hidden" name="csrf" value="<?= csrf_token($config) ?>"><input type="hidden" name="id" value="<?= field($edit, 'id') ?>">
