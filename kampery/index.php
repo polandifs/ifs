@@ -30,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             session_regenerate_id(true);
             $_SESSION['auth'] = true;
             $_SESSION['login_failures'] = 0;
-            header('Location: index.php'); exit;
+            header('Location: panel.php'); exit;
         }
         require_csrf($config);
         if (empty($_SESSION['auth'])) throw new RuntimeException('Zaloguj się ponownie.');
@@ -149,7 +149,7 @@ function field(?array $row, string $name, string $fallback = ''): string { retur
 </head>
 <body>
 <main class="shell">
-  <header class="top"><div><p class="eyebrow">PRYWATNY PANEL</p><h1>Łowca Kamperów</h1><p>Oferty, weryfikacja i scenariusze zakupu pod remont.</p><?php if ($logged): ?><p><a href="katalog.php">Przeglądaj wszystkie kampery →</a></p><?php endif; ?></div><?php if ($logged): ?><form method="post"><input type="hidden" name="csrf" value="<?= csrf_token($config) ?>"><button class="quiet" name="action" value="logout">Wyloguj</button></form><?php endif; ?></header>
+  <header class="top"><div><p class="eyebrow">PRYWATNY PANEL</p><h1>Łowca Kamperów</h1><p>Oferty, weryfikacja i scenariusze zakupu pod remont.</p><?php if ($logged): ?><p><a href="panel.php">← Panel główny IFS</a> · <a href="katalog.php">Przeglądaj wszystkie kampery →</a></p><?php endif; ?></div><?php if ($logged): ?><form method="post"><input type="hidden" name="csrf" value="<?= csrf_token($config) ?>"><button class="quiet" name="action" value="logout">Wyloguj</button></form><?php endif; ?></header>
   <?php if ($error): ?><div class="alert error" role="alert"><?= h($error) ?></div><?php endif; ?>
   <?php if ($message): ?><div class="alert success" role="status"><?= h($message) ?></div><?php endif; ?>
   <?php if (!$logged): ?>
