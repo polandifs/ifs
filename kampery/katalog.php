@@ -75,7 +75,7 @@ function page_link(int $page): string { $query = $_GET; $query['page'] = $page; 
 </head>
 <body>
 <main class="shell">
-  <header class="top"><div><p class="eyebrow">ŁOWCA KAMPERÓW · KATALOG</p><h1><?= $type ? h($type) : 'Wszystkie kampery' ?></h1><p>Porównaj ceny i parametry ofert w jednym miejscu.</p><p><a href="index.php">← Wróć do Łowcy Kamperów</a></p></div></header>
+  <header class="top"><div><p class="eyebrow">ŁOWCA KAMPERÓW · KATALOG</p><h1><?= $type ? h($type) : 'Wszystkie kampery' ?></h1><p>Porównaj ceny i parametry ofert w jednym miejscu.</p><p><a href="panel.php">← Panel główny IFS</a> · <a href="index.php">Łowca Kamperów</a></p></div></header>
   <div class="summary catalog-summary"><div><span>Oferty w katalogu</span><strong><?= (int)$overview['total'] ?></strong></div><div><span>Nowe / używane</span><strong><?= (int)$overview['fresh'] ?> / <?= (int)$overview['used'] ?></strong></div><div><span>Mediana cen z katalogu</span><strong><?= $median === null ? '—' : number_format($median, 0, ',', ' ') . ' zł' ?></strong></div></div>
   <nav class="catalog-types" aria-label="Typy kamperów"><a class="<?= $type === '' ? 'active' : '' ?>" href="katalog.php">Wszystkie <span><?= (int)$overview['total'] ?></span></a><?php foreach ($types as $item): ?><a class="<?= $type === $item['type'] ? 'active' : '' ?>" href="katalog.php?type=<?= rawurlencode($item['type']) ?>"><?= h($item['type']) ?> <span><?= (int)$item['total'] ?></span></a><?php endforeach; ?></nav>
   <section class="card">
