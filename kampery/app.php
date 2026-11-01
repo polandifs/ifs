@@ -25,13 +25,13 @@ function db(): PDO
     $dir = __DIR__ . '/data';
     if (!is_dir($dir)) mkdir($dir, 0700, true);
     $db = new PDO('sqlite:' . $dir . '/kampery.sqlite', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-    $db->exec('CREATE TABLE IF NOT EXISTS listings (
+    $db->exec("CREATE TABLE IF NOT EXISTS listings (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         url TEXT NOT NULL UNIQUE,
         title TEXT NOT NULL,
         country TEXT NOT NULL,
         kind TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT "nowa",
+        status TEXT NOT NULL DEFAULT 'nowa',
         currency TEXT NOT NULL,
         asking_price REAL NOT NULL,
         eur_rate REAL,
@@ -40,10 +40,10 @@ function db(): PDO
         transport_cost REAL NOT NULL DEFAULT 0,
         risk_reserve REAL NOT NULL DEFAULT 0,
         resale_price REAL,
-        notes TEXT NOT NULL DEFAULT "",
+        notes TEXT NOT NULL DEFAULT '',
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )');
+    )");
     return $db;
 }
 
