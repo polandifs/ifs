@@ -229,3 +229,4 @@ foreach ($sources as $source) {
     $log->execute([$source[1], $found, $added, $error]);
     echo $source[1] . ': ' . $found . ' wyników, ' . $added . ' nowych' . ($error ? ', ' . $error : '') . PHP_EOL;
 }
+require __DIR__ . '/facebook_group_scan.php';
