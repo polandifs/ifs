@@ -16,6 +16,15 @@ $input = ['street'=>'','area'=>'','rooms'=>'','condition'=>'dobry','asking'=>'',
 foreach (['street','area','rooms','asking'] as $key) {
     if (isset($_GET[$key]) && is_string($_GET[$key])) $input[$key] = mb_substr(trim($_GET[$key]), 0, 100);
 }
+$subjectUrl = $_SERVER['REQUEST_METHOD'] === 'POST' ? ($_POST['url'] ?? '') : ($_GET['url'] ?? '');
+$subjectUrl = is_string($subjectUrl) && strlen($subjectUrl) <= 2048 ? $subjectUrl : '';
+$subject = null;
+if ($subjectUrl !== '') {
+    $findSubject = homes_db()->prepare('SELECT price,area FROM homes WHERE url=?');
+    $findSubject->execute([$subjectUrl]);
+    $subject = $findSubject->fetch(PDO::FETCH_ASSOC) ?: null;
+    if ($subject === null) $subjectUrl = '';
+}
 $conditionLabels = ['remont'=>'Do remontu','dobry'=>'Stan dobry','bardzo_dobry'=>'Stan bardzo dobry'];
 $error = '';
 $market = null;
@@ -30,7 +39,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     foreach (['asking','renovation','costs'] as $key) {
         if ($input[$key] !== '' && (!ctype_digit($input[$key]) || (int)$input[$key] > 10000000)) $error = 'Kwoty podaj w pełnych złotych, maksymalnie 10 mln zł.';
     }
-    if ($error === '') $market = market_valuation(homes_db(), (float)$area, $input['street'], $input['rooms'] !== '' ? (int)$input['rooms'] : null, $input['condition'], '', true);
+    if ($error === '') $market = market_valuation(homes_db(), (float)$area, $input['street'], $input['rooms'] !== '' ? (int)$input['rooms'] : null, $input['condition'], $subjectUrl, true,
+        $subject && $subject['price'] !== null ? (int)$subject['price'] : null, $subject && $subject['area'] !== null ? (float)$subject['area'] : null);
 }
 $asking = $input['asking'] !== '' ? (int)$input['asking'] : null;
 $renovation = $input['renovation'] !== '' ? (int)$input['renovation'] : null;
@@ -49,7 +59,7 @@ $comparisonMax = $market ? max(1, (int)($reference['value'] ?? 0), (int)($market
 <ol class="steps"><li>1 · Dane mieszkania</li><li>2 · Dwa źródła cen</li><li>3 · Decyzja i rozmowa</li></ol>
 <section class="card"><div class="eyebrow">KROK 1</div><h2>Opisz mieszkanie</h2><p class="hint">Transakcje: do 500 m od ulicy, metraż ±20%, ostatnie 24 miesiące. Bez ulicy pokazujemy wstępny punkt RCN dla całego Kwidzyna. Oferty: Kwidzyn, metraż ±20%, ta sama liczba pokoi, jeśli ją podasz, widziane w ostatnich 30 dniach. Wspólny wniosek i propozycja negocjacyjna wymagają co najmniej 5 porównań z każdego źródła; przy rozbieżności pokazujemy wstępny punkt cenowy.</p>
 <?php if ($error): ?><p class="alert" role="alert"><?= homes_e($error) ?></p><?php endif ?>
-<form method="post"><input type="hidden" name="csrf" value="<?= homes_e(csrf_token($config)) ?>"><div class="grid">
+<form method="post"><input type="hidden" name="csrf" value="<?= homes_e(csrf_token($config)) ?>"><input type="hidden" name="url" value="<?= homes_e($subjectUrl) ?>"><div class="grid">
 <div class="field"><label for="street">Ulica lub ulica i numer (jeśli znasz)</label><input id="street" name="street" maxlength="100" placeholder="np. Mickiewicza 12" value="<?= homes_e($input['street']) ?>"></div>
 <div class="field"><label for="area">Powierzchnia (m²)</label><input id="area" name="area" type="number" step="0.01" min="15" max="250" required value="<?= homes_e($input['area']) ?>"></div>
 <div class="field"><label for="rooms">Liczba pokoi</label><select id="rooms" name="rooms"><option value="">Nie wiem</option><?php for ($n=1;$n<=8;$n++): ?><option value="<?= $n ?>" <?= $input['rooms']===(string)$n?'selected':'' ?>><?= $n ?></option><?php endfor ?></select></div>
