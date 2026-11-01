@@ -142,11 +142,11 @@ function field(?array $row, string $name, string $fallback = ''): string { retur
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Łowca Kamperów</title>
-  <link rel="stylesheet" href="style.css?v=20261101-catalog">
+  <link rel="stylesheet" href="style.css?v=20261101-all">
 </head>
 <body>
 <main class="shell">
-  <header class="top"><div><p class="eyebrow">PRYWATNY PANEL</p><h1>Łowca Kamperów</h1><p>Oferty, weryfikacja i scenariusze zakupu pod remont.</p><?php if ($logged): ?><p><a href="alkowy.php">Przeglądaj alkowy →</a></p><?php endif; ?></div><?php if ($logged): ?><form method="post"><input type="hidden" name="csrf" value="<?= csrf_token($config) ?>"><button class="quiet" name="action" value="logout">Wyloguj</button></form><?php endif; ?></header>
+  <header class="top"><div><p class="eyebrow">PRYWATNY PANEL</p><h1>Łowca Kamperów</h1><p>Oferty, weryfikacja i scenariusze zakupu pod remont.</p><?php if ($logged): ?><p><a href="katalog.php">Przeglądaj wszystkie kampery →</a></p><?php endif; ?></div><?php if ($logged): ?><form method="post"><input type="hidden" name="csrf" value="<?= csrf_token($config) ?>"><button class="quiet" name="action" value="logout">Wyloguj</button></form><?php endif; ?></header>
   <?php if ($error): ?><div class="alert error" role="alert"><?= h($error) ?></div><?php endif; ?>
   <?php if ($message): ?><div class="alert success" role="status"><?= h($message) ?></div><?php endif; ?>
   <?php if (!$logged): ?>
