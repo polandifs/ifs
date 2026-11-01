@@ -22,7 +22,13 @@ foreach (homes_sources() as $source => $url) {
             $insert->execute($offer);
             if ($insert->rowCount()) {
                 $added++;
-                if ($previous > 0) $new[$offer['url']] = $offer;
+                $duplicate = false;
+                if ($source === 'Morizon') {
+                    $match = $db->prepare("SELECT 1 FROM homes WHERE source='Gratka' AND title=? AND price=? AND area=? LIMIT 1");
+                    $match->execute([$offer['title'], $offer['price'], $offer['area']]);
+                    $duplicate = (bool)$match->fetchColumn();
+                }
+                if ($previous > 0 && !$duplicate) $new[$offer['url']] = $offer;
             } else {
                 $update->execute($offer);
             }
