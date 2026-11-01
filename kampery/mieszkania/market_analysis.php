@@ -2,10 +2,16 @@
 declare(strict_types=1);
 require_once __DIR__ . '/valuation_core.php';
 
-function market_listing_summary(PDO $db, float $area, ?int $rooms = null, string $excludeUrl = '', ?int $excludePrice = null, ?float $excludeArea = null): array {
+function market_building_type(string $title): string {
+    if (preg_match('/(?:^|[^\p{L}])kamienic[\p{L}]*/iu', $title)) return 'kamienica';
+    if (preg_match('/(?:^|[^\p{L}])blok(?:u|iem|ow[yae])?(?=$|[^\p{L}])/iu', $title)) return 'blok';
+    return '';
+}
+
+function market_listing_summary(PDO $db, float $area, ?int $rooms = null, string $excludeUrl = '', ?int $excludePrice = null, ?float $excludeArea = null, string $buildingType = ''): array {
     $empty = ['available'=>false, 'count'=>0, 'median'=>null, 'low'=>null, 'high'=>null, 'examples'=>[],
-        'price_m2'=>null, 'indicative_median'=>null, 'probable_duplicates'=>0,
-        'scope'=>'Oferty z Kwidzyna · metraż ±20%' . ($rooms ? ' · ' . $rooms . ' pok.' : ''),
+        'price_m2'=>null, 'indicative_median'=>null, 'probable_duplicates'=>0, 'unknown_building'=>0, 'other_building'=>0,
+        'scope'=>'Oferty z Kwidzyna · metraż ±20%' . ($rooms ? ' · ' . $rooms . ' pok.' : '') . ($buildingType !== '' ? ' · ' . $buildingType : ''),
         'reason'=>'too_few'];
     if ($area < 15 || $area > 250) return $empty;
     $since = gmdate('Y-m-d H:i:s', strtotime('-30 days'));
@@ -17,6 +23,11 @@ function market_listing_summary(PDO $db, float $area, ?int $rooms = null, string
     $values = []; $seen = []; $examples = [];
     foreach ($query->fetchAll(PDO::FETCH_ASSOC) as $row) {
         if ($row['url'] === $excludeUrl) continue;
+        if ($buildingType !== '') {
+            $candidateType = market_building_type((string)$row['title']);
+            if ($candidateType === '') { ++$empty['unknown_building']; continue; }
+            if ($candidateType !== $buildingType) { ++$empty['other_building']; continue; }
+        }
         // The same flat can appear under another portal URL. An exact price and near-identical
         // area are a conservative duplicate signal when valuing a known listing.
         if ($excludeUrl !== '' && $excludePrice !== null && $excludeArea !== null
@@ -46,9 +57,9 @@ function market_listing_summary(PDO $db, float $area, ?int $rooms = null, string
         'price_m2'=>(int)round(valuation_percentile($values, .5))]);
 }
 
-function market_valuation(PDO $db, float $area, string $street, ?int $rooms = null, string $condition = 'dobry', string $excludeUrl = '', bool $withCityFallback = false, ?int $excludePrice = null, ?float $excludeArea = null): array {
+function market_valuation(PDO $db, float $area, string $street, ?int $rooms = null, string $condition = 'dobry', string $excludeUrl = '', bool $withCityFallback = false, ?int $excludePrice = null, ?float $excludeArea = null, string $buildingType = ''): array {
     $rcn = valuation_summary($db, $area, $street);
-    $listings = market_listing_summary($db, $area, $rooms, $excludeUrl, $excludePrice, $excludeArea);
+    $listings = market_listing_summary($db, $area, $rooms, $excludeUrl, $excludePrice, $excludeArea, $buildingType);
     $rcnCity = $withCityFallback && !$rcn['available'] ? valuation_city_summary($db, $area) : null;
     // The source data do not identify condition consistently. Never infer a condition discount.
     $rcnValue = $rcn['available'] ? $rcn['median'] : null;
@@ -66,7 +77,8 @@ function market_valuation(PDO $db, float $area, string $street, ?int $rooms = nu
         $estimate = $basis === 'both' ? $rcnValue : null;
     } elseif ($rcnValue !== null) { $basis = 'rcn'; }
     elseif ($listingValue !== null) { $basis = 'listings'; }
-    return ['rcn'=>$rcn, 'rcn_city'=>$rcnCity, 'listings'=>$listings, 'rcn_value'=>$rcnValue,
+    if ($buildingType !== '' && $basis === 'both') { $basis = 'building_unverified'; $estimate = null; }
+    return ['rcn'=>$rcn, 'rcn_city'=>$rcnCity, 'listings'=>$listings, 'building_type'=>$buildingType, 'rcn_value'=>$rcnValue,
         'listing_value'=>$listingValue, 'estimate'=>$estimate, 'basis'=>$basis,
         'joint_low'=>$jointLow !== null && $jointLow <= $jointHigh?$jointLow:null,
         'joint_high'=>$jointHigh !== null && $jointLow <= $jointHigh?$jointHigh:null,
@@ -77,9 +89,9 @@ function market_display_reference(array $market): array {
     if ($market['estimate'] !== null) return ['value'=>$market['estimate'],
         'label'=>'Punkt odniesienia RCN', 'note'=>'Potwierdzony porównaniem obu źródeł'];
     if ($market['rcn_value'] !== null) return ['value'=>$market['rcn_value'],
-        'label'=>'Wstępny punkt RCN', 'note'=>'Źródła są rozbieżne; bez automatycznej propozycji ceny'];
+        'label'=>'Wstępny punkt RCN', 'note'=>$market['building_type'] !== '' ? 'RCN bez podziału na kamienice i bloki' : 'Źródła są rozbieżne; bez automatycznej propozycji ceny'];
     if (($market['rcn_city']['available'] ?? false)) return ['value'=>$market['rcn_city']['median'],
-        'label'=>'Wstępny punkt RCN · Kwidzyn', 'note'=>'Całe miasto; wpisz ulicę dla dokładniejszego porównania'];
+        'label'=>'Wstępny punkt RCN · Kwidzyn', 'note'=>'Całe miasto, bez podziału na typ budynku; wpisz ulicę dla dokładniejszego porównania'];
     if ($market['listing_value'] !== null) return ['value'=>$market['listing_value'],
         'label'=>'Orientacyjna mediana ogłoszeń', 'note'=>'Ceny ofertowe, bez potwierdzenia transakcjami RCN'];
     if ($market['listings']['indicative_median'] !== null) return ['value'=>$market['listings']['indicative_median'],
