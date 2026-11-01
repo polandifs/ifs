@@ -26,7 +26,7 @@ foreach (homes_sources() as $source => $url) {
             if ($insert->rowCount()) {
                 $added++;
                 $duplicate = false;
-                if ($source === 'Morizon' || $source === 'Domiporta' || $source === 'Gratka' || $source === 'Nieruchomosci-online') {
+                if ($offer['price'] !== null && $offer['area'] !== null && $offer['rooms'] !== null && $offer['street'] !== '') {
                     $match = $db->prepare("SELECT 1 FROM homes WHERE source<>? AND price=? AND area IS NOT NULL AND ABS(area-?)<0.15 AND rooms=? AND street=? AND street<>'' LIMIT 1");
                     $match->execute([$source, $offer['price'], $offer['area'], $offer['rooms'], $offer['street']]);
                     $duplicate = (bool)$match->fetchColumn();
