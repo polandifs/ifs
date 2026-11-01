@@ -40,7 +40,7 @@ function valuation_geometry(PDO $db, string $street): array {
     $geometry = [];
     $serviceResponded = false;
     foreach (array_unique($queries) as $query) {
-        $url = 'https://services.gugik.gov.pl/uug?request=GetAddress&address=' . rawurlencode('Kwidzyn, ' . $query);
+        $url = 'https://services.gugik.gov.pl/uug/?request=GetAddress&address=' . rawurlencode('Kwidzyn, ' . $query);
         $ch = curl_init($url);
         curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER=>true, CURLOPT_FOLLOWLOCATION=>false, CURLOPT_CONNECTTIMEOUT=>2,
             CURLOPT_TIMEOUT=>4, CURLOPT_MAXFILESIZE=>100000, CURLOPT_USERAGENT=>'IFS-Kwidzyn-RCN/1.0']);
