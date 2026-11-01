@@ -3,6 +3,7 @@ declare(strict_types=1);
 require dirname(__DIR__) . '/app.php';
 require __DIR__ . '/core.php';
 require __DIR__ . '/market_analysis.php';
+$config = config();
 session_name('kampery_session');
 session_set_cookie_params(['httponly' => true, 'secure' => true, 'samesite' => 'Lax']);
 session_start();
@@ -17,6 +18,25 @@ $find = $db->prepare('SELECT * FROM homes WHERE url=?');
 $find->execute([$url]);
 $home = $find->fetch(PDO::FETCH_ASSOC);
 if (!$home) { http_response_code(404); exit('Nie znaleziono oferty.'); }
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_csrf($config);
+    $action = (string)($_POST['action'] ?? '');
+    if ($action === 'candidate_add') {
+        $db->prepare('INSERT OR IGNORE INTO watched(url) VALUES (?)')->execute([$url]);
+        $db->prepare('UPDATE watched SET purchase_candidate=1,candidate_at=CURRENT_TIMESTAMP WHERE url=?')->execute([$url]);
+    } elseif ($action === 'candidate_remove') {
+        $db->prepare("UPDATE watched SET purchase_candidate=0,candidate_at='' WHERE url=?")->execute([$url]);
+    } else { http_response_code(400); exit('Nieznana operacja.'); }
+    $returnQuery = ['url' => $url];
+    foreach (['street', 'area', 'building'] as $key) {
+        if (isset($_GET[$key]) && is_string($_GET[$key])) $returnQuery[$key] = mb_substr($_GET[$key], 0, 100);
+    }
+    header('Location: history.php?' . http_build_query($returnQuery, '', '&', PHP_QUERY_RFC3986) . '#oferta');
+    exit;
+}
+$favoriteQuery = $db->prepare('SELECT purchase_candidate FROM watched WHERE url=?');
+$favoriteQuery->execute([$url]);
+$isFavorite = (int)$favoriteQuery->fetchColumn() === 1;
 $analysisStreet = isset($_GET['street']) && is_string($_GET['street']) ? mb_substr(trim($_GET['street']), 0, 100) : (string)$home['street'];
 $analysisArea = isset($_GET['area']) ? filter_var($_GET['area'], FILTER_VALIDATE_FLOAT) : ($home['area'] !== null ? (float)$home['area'] : false);
 $buildingType = isset($_GET['building']) && is_string($_GET['building']) ? (string)$_GET['building'] : market_building_type((string)$home['title']);
@@ -85,7 +105,9 @@ $labels = ['title' => 'Zmiana tytułu', 'area' => 'Zmiana metrażu', 'rooms' => 
 <!doctype html><html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Historia ogłoszenia · IFS</title>
 <style>:root{color-scheme:light}*{box-sizing:border-box}body{margin:0;background:#f4f7f6;color:#17342e;font:16px/1.5 system-ui,-apple-system,sans-serif}header{background:#123c38;color:white;padding:22px}header div,main{max-width:1000px;margin:auto}header a{color:#d7eee9}h1{margin:0;font-size:28px}main{padding:24px}.card{background:#fff;border:1px solid #dae5e1;border-radius:14px;padding:20px;margin:16px 0}.summary{display:grid;grid-template-columns:180px 1fr;gap:20px}.photo{width:180px;height:150px;object-fit:cover;border-radius:9px;background:#e7efec}.price{font-size:25px;font-weight:750;color:#0e604d}.muted{color:#637a75;font-size:14px}.facts{display:flex;gap:22px;flex-wrap:wrap}.facts div{min-width:150px}.facts b{display:block}.timeline{list-style:none;padding:0;margin:0}.timeline li{border-left:3px solid #bddbd1;padding:0 0 20px 18px;margin-left:5px;position:relative}.timeline li:before{content:'';position:absolute;left:-7px;top:4px;width:11px;height:11px;border-radius:50%;background:#0d755f}.timeline time{font-size:13px;color:#637a75}.timeline b{display:block}.change{overflow-wrap:anywhere}a{color:#0b685a}.valuation-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}.valuation-box{border-radius:12px;background:#eaf4ef;padding:16px}.valuation-box strong{display:block;font-size:24px}.valuation-box.positive{background:#e1f5e9;color:#145e3b}.valuation-box.negative{background:#fff0eb;color:#972f2a}.valuation-bar{height:15px;margin:20px 0 8px;border-radius:99px;background:linear-gradient(90deg,#d8e7df,#55aa88)}.valuation-range{display:flex;justify-content:space-between;font-size:13px;font-weight:700}.valuation-note{border-left:4px solid #83b9a2;padding-left:12px}.valuation-tag{font-size:12px;font-weight:800;letter-spacing:.1em;color:#0d715b}.listing-comps{margin-top:22px}.listing-comps h3{margin:0 0 4px}.comparable-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0}.comparable{border:1px solid #d8e7df;border-radius:10px;padding:13px;min-width:0;background:#f8fbf9}.comparable strong{display:block;color:#0d604d;font-size:20px}.comparable a{display:block;font-weight:700;line-height:1.3;overflow-wrap:anywhere}.comparable small{display:block;color:#637a75;margin-top:5px}@media(max-width:650px){.summary,.comparable-list{grid-template-columns:1fr}.photo{width:100%;height:220px}}</style><link rel="stylesheet" href="ui.css?v=2"></head><body class="page-detail">
 <header><div><h1>Historia ogłoszenia</h1><a href="./">← Oferty mieszkań</a> · <a href="watch.php">Obserwowane</a></div></header><main>
-<article class="card summary"><div><?php if ($home['image_url']): ?><img class="photo" src="<?= homes_e($home['image_url']) ?>" alt="" referrerpolicy="no-referrer"><?php else: ?><div class="photo-placeholder">Zdjęcie niedostępne</div><?php endif ?></div><div class="summary-copy"><span class="eyebrow"><?= homes_e($home['source']) ?> · OGŁOSZENIE</span><h2><?= homes_e($home['title']) ?></h2><div class="price"><?= $home['price'] !== null ? history_money((int)$home['price']) : 'Cena do sprawdzenia' ?></div><div class="chip-row"><?php if ($home['area'] !== null): ?><span class="fact-chip"><?= number_format((float)$home['area'],1,',',' ') ?> m²</span><?php endif ?><?php if ($home['rooms'] !== null): ?><span class="fact-chip"><?= (int)$home['rooms'] ?> pok.</span><?php endif ?><?php if ($home['street'] !== ''): ?><span class="fact-chip"><?= homes_e($home['street']) ?></span><?php endif ?></div><a href="<?= homes_e($home['url']) ?>" target="_blank" rel="noopener noreferrer">Otwórz ogłoszenie w portalu ↗</a></div></article>
+<article class="card summary" id="oferta"><div><?php if ($home['image_url']): ?><img class="photo" src="<?= homes_e($home['image_url']) ?>" alt="" referrerpolicy="no-referrer"><?php else: ?><div class="photo-placeholder">Zdjęcie niedostępne</div><?php endif ?></div><div class="summary-copy"><span class="eyebrow"><?= homes_e($home['source']) ?> · OGŁOSZENIE</span><h2><?= homes_e($home['title']) ?></h2><div class="price"><?= $home['price'] !== null ? history_money((int)$home['price']) : 'Cena do sprawdzenia' ?></div><div class="chip-row"><?php if ($home['area'] !== null): ?><span class="fact-chip"><?= number_format((float)$home['area'],1,',',' ') ?> m²</span><?php endif ?><?php if ($home['rooms'] !== null): ?><span class="fact-chip"><?= (int)$home['rooms'] ?> pok.</span><?php endif ?><?php if ($home['street'] !== ''): ?><span class="fact-chip"><?= homes_e($home['street']) ?></span><?php endif ?></div><a href="<?= homes_e($home['url']) ?>" target="_blank" rel="noopener noreferrer">Otwórz ogłoszenie w portalu ↗</a>
+<form method="post" style="margin:16px 0 0"><input type="hidden" name="csrf" value="<?= homes_e(csrf_token($config)) ?>"><button type="submit" name="action" value="<?= $isFavorite ? 'candidate_remove' : 'candidate_add' ?>" aria-pressed="<?= $isFavorite ? 'true' : 'false' ?>" style="border:0;border-radius:9px;padding:10px 15px;background:<?= $isFavorite ? '#fff0ca' : '#0c6958' ?>;color:<?= $isFavorite ? '#654700' : '#fff' ?>;font:inherit;font-weight:700;cursor:pointer"><?= $isFavorite ? '★ W ulubionych · usuń' : '★ Zapisz do ulubionych' ?></button><?php if ($isFavorite): ?> <a href="watch.php?view=candidates#zapisane" style="margin-left:8px">Zobacz ulubione →</a><?php endif ?></form>
+</div></article>
 
 <section class="card" id="analiza"><div class="valuation-tag">ANALIZA CENY · DWA ŹRÓDŁA</div><h2>Porównanie i decyzja</h2>
 <p class="muted">Automatyczny wariant zakłada stan dobry. Standard lokalu zweryfikuj podczas oględzin; w pełnej wycenie możesz go zmienić i dodać koszty.</p>
