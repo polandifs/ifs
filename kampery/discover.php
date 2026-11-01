@@ -119,16 +119,21 @@ function reference_candidates(string $csv): array
         if ($year < 1980 || $year > (int)date('Y') || $price < 30000 || $price > 300000) continue;
         $type = trim($r['Typ']);
         $key = $type . '|' . (int)(floor($year / 5) * 5);
-        $rows[] = [$r, $price, $key];
-        $groups[$key][] = $price;
+        $km = (int)preg_replace('/\D/', '', $r['Przebieg km']);
+        if ($km <= 0) continue;
+        $rows[] = [$r, $price, $key, $km];
+        $groups[$key][] = [$price, $km];
     }
     fclose($stream);
-    foreach ($groups as &$prices) sort($prices, SORT_NUMERIC);
-    unset($prices);
     $out = [];
-    foreach ($rows as [$r, $price, $key]) {
-        $prices = $groups[$key];
-        if (count($prices) < 12) continue;
+    foreach ($rows as [$r, $price, $key, $km]) {
+        $prices = [];
+        $kmRange = max(50000, (int)($km * 0.4));
+        foreach ($groups[$key] as [$otherPrice, $otherKm]) {
+            if (abs($otherKm - $km) <= $kmRange) $prices[] = $otherPrice;
+        }
+        if (count($prices) < 8) continue;
+        sort($prices, SORT_NUMERIC);
         $median = $prices[(int)floor(count($prices) / 2)];
         if ($price >= $median * 0.70) continue;
         $url = trim($r['Link do ogłoszenia']);
