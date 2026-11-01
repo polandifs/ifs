@@ -23,7 +23,8 @@ Plik `config.php` i katalog `data/` są blokowane przez reguły `.htaccess`. Prz
 ## Zakres
 
 - Ręczne zapisywanie ofert z usuwaniem duplikatów po adresie URL.
-- Cykliczne sprawdzanie publicznych stron wyszukiwania Otomoto, Kleinanzeigen, Marktplaats i 2dehands w PL, DE, NL i BE. Dodatkowo raz dziennie analizowany jest publiczny eksport CSV WybierzKampera: oferty używane co najmniej 30% poniżej mediany tego samego typu, pięcioletniej grupy roczników i zbliżonego przebiegu są tropami do sprawdzenia. Skan zapisuje nowe linki, datę wykrycia, sygnał uszkodzenia i obniżkę ceny, gdy da się porównać odczyty. Wyniki nie potwierdzają dostępności, stanu, ceny ani zysku. Nie obejmują prywatnych grup Facebooka.
+- Cykliczne sprawdzanie publicznych stron wyszukiwania Otomoto, Kleinanzeigen, Marktplaats i 2dehands w PL, DE, NL i BE. Dodatkowo najwyżej raz na 20 godzin analizowany jest publiczny eksport CSV WybierzKampera: oferty używane co najmniej 30% poniżej mediany tego samego typu, pięcioletniej grupy roczników i zbliżonego przebiegu są tropami do sprawdzenia. Skan zapisuje nowe linki, datę wykrycia, sygnał uszkodzenia i obniżkę ceny, gdy da się porównać odczyty. Wyniki nie potwierdzają dostępności, stanu, ceny ani zysku.
+- Grupa Facebook „Camping i Caravaning Polska” jest podłączona jako źródło do ręcznego dodawania postów sprzedażowych. Serwer otrzymuje stronę logowania zamiast wpisów grupy, dlatego nie ma automatycznego odświeżania ofert Facebooka. Posty są oznaczane jako dodane ręcznie, osobno od wyników skanu.
 - Kalkulacja przy cenie ofertowej i przy zakładanej negocjacji, z kosztami naprawy, transportu i rezerwą.
 - Oznaczenie scenariusza jako „do sprawdzenia”, gdy szacowana nadwyżka wynosi co najmniej 15 tys. zł; priorytet od 25 tys. zł.
 
