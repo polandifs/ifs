@@ -50,7 +50,7 @@ $comparisonMax = $market ? max(1, (int)($market['rcn_value'] ?? 0), (int)($marke
 <?php if ($error): ?><p class="alert" role="alert"><?= homes_e($error) ?></p><?php endif ?>
 <form method="post"><input type="hidden" name="csrf" value="<?= homes_e(csrf_token($config)) ?>"><div class="grid">
 <div class="field"><label for="street">Ulica lub ulica i numer</label><input id="street" name="street" maxlength="100" required placeholder="np. Mickiewicza 12" value="<?= homes_e($input['street']) ?>"></div>
-<div class="field"><label for="area">Powierzchnia (m²)</label><input id="area" name="area" type="number" step="0.1" min="15" max="250" required value="<?= homes_e($input['area']) ?>"></div>
+<div class="field"><label for="area">Powierzchnia (m²)</label><input id="area" name="area" type="number" step="0.01" min="15" max="250" required value="<?= homes_e($input['area']) ?>"></div>
 <div class="field"><label for="rooms">Liczba pokoi</label><select id="rooms" name="rooms"><option value="">Nie wiem</option><?php for ($n=1;$n<=8;$n++): ?><option value="<?= $n ?>" <?= $input['rooms']===(string)$n?'selected':'' ?>><?= $n ?></option><?php endfor ?></select></div>
 <div class="field"><label for="condition">Stan mieszkania</label><select id="condition" name="condition"><?php foreach ($conditionLabels as $key=>$label): ?><option value="<?= $key ?>" <?= $input['condition']===$key?'selected':'' ?>><?= homes_e($label) ?></option><?php endforeach ?></select></div>
 <div class="field"><label for="asking">Cena w ogłoszeniu (zł)</label><input id="asking" name="asking" type="number" min="0" max="10000000" placeholder="Jeśli znana" value="<?= homes_e($input['asking']) ?>"></div>
