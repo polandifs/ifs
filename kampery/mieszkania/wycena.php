@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require dirname(__DIR__) . '/app.php';
 require __DIR__ . '/core.php';
-require __DIR__ . '/valuation_core.php';
+require __DIR__ . '/market_analysis.php';
 $config = config();
 session_name('kampery_session');
 session_set_cookie_params(['httponly'=>true,'secure'=>true,'samesite'=>'Lax']);
@@ -11,59 +11,64 @@ header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
 if (empty($_SESSION['auth'])) { header('Location: ../index.php'); exit; }
-$input = ['street'=>'','area'=>'','condition'=>'dobry','asking'=>'','renovation'=>'','costs'=>''];
-foreach (['street','area','asking'] as $key) {
+
+$input = ['street'=>'','area'=>'','rooms'=>'','condition'=>'dobry','asking'=>'','renovation'=>'','costs'=>''];
+foreach (['street','area','rooms','asking'] as $key) {
     if (isset($_GET[$key]) && is_string($_GET[$key])) $input[$key] = mb_substr(trim($_GET[$key]), 0, 100);
 }
+$conditionLabels = ['remont'=>'Do remontu','dobry'=>'Stan dobry','bardzo_dobry'=>'Stan bardzo dobry'];
 $error = '';
-$result = null;
+$market = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf($config);
-    foreach ($input as $key => $ignored) $input[$key] = trim((string)($_POST[$key] ?? ''));
+    foreach ($input as $key=>$unused) $input[$key] = trim((string)($_POST[$key] ?? ''));
     $area = filter_var(str_replace(',', '.', $input['area']), FILTER_VALIDATE_FLOAT);
     if ($area === false || $area < 15 || $area > 250) $error = 'Podaj metraż od 15 do 250 m².';
-    elseif ($input['street'] === '') $error = 'Podaj ulicę, aby wyznaczyć promień 500 m.';
-    elseif (mb_strlen($input['street']) > 100) $error = 'Nazwa ulicy jest za długa.';
-    elseif (!in_array($input['condition'], ['remont','dobry','bardzo_dobry'], true)) $error = 'Wybierz stan mieszkania.';
-    else {
-        foreach (['asking','renovation','costs'] as $key) {
-            if ($input[$key] !== '' && (!ctype_digit($input[$key]) || (int)$input[$key] > 10000000)) { $error = 'Kwoty podaj w pełnych złotych, maksymalnie 10 mln zł.'; break; }
-        }
+    elseif ($input['street'] === '' || mb_strlen($input['street']) > 100) $error = 'Podaj ulicę w Kwidzynie (do 100 znaków).';
+    elseif ($input['rooms'] !== '' && (!ctype_digit($input['rooms']) || (int)$input['rooms'] < 1 || (int)$input['rooms'] > 8)) $error = 'Podaj liczbę pokoi od 1 do 8.';
+    elseif (!isset($conditionLabels[$input['condition']])) $error = 'Wybierz stan mieszkania.';
+    foreach (['asking','renovation','costs'] as $key) {
+        if ($input[$key] !== '' && (!ctype_digit($input[$key]) || (int)$input[$key] > 10000000)) $error = 'Kwoty podaj w pełnych złotych, maksymalnie 10 mln zł.';
     }
-    if ($error === '') {
-        $db = homes_db();
-        $result = valuation_summary($db, (float)$area, $input['street']);
-    }
+    if ($error === '') $market = market_valuation(homes_db(), (float)$area, $input['street'], $input['rooms'] !== '' ? (int)$input['rooms'] : null, $input['condition']);
 }
 $asking = $input['asking'] !== '' ? (int)$input['asking'] : null;
 $renovation = $input['renovation'] !== '' ? (int)$input['renovation'] : null;
 $costs = $input['costs'] !== '' ? (int)$input['costs'] : 0;
-$estimate = $result ? valuation_scenario($result, $input['condition']) : null;
-$resale = $result && $result['available'] ? ($input['condition'] === 'remont' ? $result['upper_quartile'] : $estimate) : null;
-$spread = $resale !== null && $asking !== null && ($input['condition'] !== 'remont' || $renovation !== null)
-    ? $resale - $asking - ($renovation ?? 0) - $costs : null;
-$conditionLabels = ['remont'=>'Do remontu','dobry'=>'Stan dobry','bardzo_dobry'=>'Stan bardzo dobry'];
+$talk = $market ? market_negotiation($market, $asking, $renovation, $costs) : null;
+$spread = $market && $market['basis'] === 'both' && $asking !== null && ($input['condition'] !== 'remont' || $renovation !== null)
+    ? $market['estimate'] - $asking - ($renovation ?? 0) - $costs : null;
 ?>
 <!doctype html><html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Wycena mieszkania · IFS</title>
-<style>:root{color-scheme:light}*{box-sizing:border-box}body{margin:0;background:#f3f7f5;color:#17342e;font:16px/1.5 system-ui,-apple-system,sans-serif}header{background:linear-gradient(125deg,#123c38,#0e6959);color:white;padding:28px 20px}header .wrap,main{max-width:1100px;margin:auto}header h1{font-size:32px;margin:0}header p{margin:6px 0 0;color:#d7eee9}a{color:#0b685a}header a{color:#e6f8f0}main{padding:24px}.card{background:white;border:1px solid #d7e4df;border-radius:18px;padding:24px;margin:18px 0;box-shadow:0 6px 24px #153c3010}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px}.field label{display:block;font-size:14px;font-weight:700;margin-bottom:6px}.field input,.field select{width:100%;border:1px solid #b8cbc5;border-radius:10px;padding:12px;font:inherit;background:#fff;color:#17342e}.hint{color:#607b73;font-size:14px}.eyebrow{font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#0c8067}.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}.metric{padding:18px;border-radius:14px;background:#eaf4ef}.metric.primary{background:#0d5b4a;color:white}.metric span{display:block;font-size:13px}.metric strong{display:block;font-size:26px;line-height:1.15;margin-top:9px}.range{position:relative;height:16px;border-radius:99px;background:linear-gradient(90deg,#dae9e3,#4da889);margin:22px 0 9px}.range i{position:absolute;top:-8px;width:3px;height:32px;background:#1c3130}.range-labels{display:flex;justify-content:space-between;font-weight:700}.button{border:0;border-radius:10px;padding:12px 19px;background:#d9ed64;color:#163b32;font:inherit;font-weight:800;cursor:pointer}.alert{padding:12px;border-radius:10px;background:#fff0ec;color:#9b3526}.positive{color:#126742}.negative{color:#a22d2d}.result-title{margin-bottom:6px}.note{border-left:4px solid #75b99f;padding-left:14px;color:#526d65}.links{display:flex;gap:16px;flex-wrap:wrap}@media(max-width:650px){main{padding:14px}.card{padding:18px}header h1{font-size:27px}}</style></head><body>
-<header><div class="wrap"><div class="eyebrow" style="color:#ccefdc">IFS · NIERUCHOMOŚCI</div><h1>Wycena mieszkania w Kwidzynie</h1><p>Porównanie z rzeczywistymi transakcjami RCN</p><p class="links"><a href="./">← Oferty mieszkań</a><a href="watch.php">Obserwowane</a><a href="rcn_market.php">Transakcje RCN</a></p></div></header><main>
-<section class="card"><div class="eyebrow">DANE MIESZKANIA</div><h2>Uzupełnij parametry</h2><p class="hint">Porównujemy transakcje do 500 m od wskazanej ulicy lub numeru budynku, o metrażu ±20%. Wynik wymaga co najmniej 5 transakcji; nie rozszerzamy porównania na całe miasto.</p>
+<style>
+:root{color-scheme:light}*{box-sizing:border-box}body{margin:0;background:#f3f7f5;color:#17342e;font:16px/1.5 system-ui,-apple-system,sans-serif}a{color:#0b685a}header{background:#123c38;color:white;padding:24px}header .wrap,main{max-width:1080px;margin:auto}header h1{margin:0;font-size:29px}header p{margin:5px 0;color:#d7eee9}header a{color:#d7eee9}.nav{display:flex;gap:18px;flex-wrap:wrap;margin-top:14px}.nav a{font-weight:700}main{padding:20px}.card{background:#fff;border:1px solid #d7e4df;border-radius:16px;padding:22px;margin:16px 0;box-shadow:0 3px 14px #153c300d}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:13px}.field label{display:block;font-size:14px;font-weight:700;margin-bottom:5px}.field input,.field select{width:100%;border:1px solid #b8cbc5;border-radius:9px;padding:10px;font:inherit;background:#fff;color:#17342e}.eyebrow{font-size:12px;font-weight:800;letter-spacing:.1em;color:#0c8067}.hint{font-size:14px;color:#58756b}.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(225px,1fr));gap:12px}.metric{background:#eaf4ef;border-radius:12px;padding:16px}.metric.primary{background:#0d5b4a;color:#fff}.metric span{font-size:13px;display:block}.metric strong{font-size:25px;line-height:1.2;display:block;margin-top:8px}.button{border:0;border-radius:9px;padding:11px 18px;background:#d9ed64;color:#17342e;font:inherit;font-weight:800;cursor:pointer}.alert{padding:12px;border-radius:9px;background:#fff0ec;color:#9b3526}.notice{background:#fff8e6;border-left:4px solid #daa22d;padding:12px}.good{color:#126742}.bad{color:#a22d2d}textarea{width:100%;min-height:170px;padding:12px;border:1px solid #b8cbc5;border-radius:9px;font:inherit;line-height:1.5}.steps{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 18px;padding:0;list-style:none}.steps li{background:#e5efeb;padding:6px 11px;border-radius:99px;font-size:13px;font-weight:700}details{border-top:1px solid #d7e4df;padding-top:12px}summary{cursor:pointer;font-weight:700}@media(max-width:650px){main{padding:12px}.card{padding:17px}header h1{font-size:25px}}
+</style></head><body>
+<header><div class="wrap"><div class="eyebrow" style="color:#bfe7d8">IFS · NIERUCHOMOŚCI</div><h1>Wycena i rozmowa o cenie</h1><p>Jedna analiza: oferty, transakcje, budżet zakupu.</p><nav class="nav" aria-label="Nawigacja"><a href="./">Oferty</a><a href="watch.php">Obserwowane</a><a href="rcn_market.php">Transakcje RCN</a><a href="../panel.php">IFS</a></nav></div></header><main>
+<ol class="steps"><li>1 · Dane mieszkania</li><li>2 · Dwa źródła cen</li><li>3 · Decyzja i rozmowa</li></ol>
+<section class="card"><div class="eyebrow">KROK 1</div><h2>Opisz mieszkanie</h2><p class="hint">Transakcje: do 500 m od ulicy, metraż ±20%, ostatnie 24 miesiące. Oferty: Kwidzyn, metraż ±20%, ta sama liczba pokoi, jeśli ją podasz, widziane w ostatnich 30 dniach. Każde źródło wymaga minimum 5 porównań.</p>
 <?php if ($error): ?><p class="alert" role="alert"><?= homes_e($error) ?></p><?php endif ?>
 <form method="post"><input type="hidden" name="csrf" value="<?= homes_e(csrf_token($config)) ?>"><div class="grid">
 <div class="field"><label for="street">Ulica lub ulica i numer</label><input id="street" name="street" maxlength="100" required placeholder="np. Mickiewicza 12" value="<?= homes_e($input['street']) ?>"></div>
-<div class="field"><label for="area">Powierzchnia, m²</label><input id="area" name="area" type="number" step="0.1" min="15" max="250" required value="<?= homes_e($input['area']) ?>"></div>
+<div class="field"><label for="area">Powierzchnia (m²)</label><input id="area" name="area" type="number" step="0.1" min="15" max="250" required value="<?= homes_e($input['area']) ?>"></div>
+<div class="field"><label for="rooms">Liczba pokoi</label><select id="rooms" name="rooms"><option value="">Nie wiem</option><?php for ($n=1;$n<=8;$n++): ?><option value="<?= $n ?>" <?= $input['rooms']===(string)$n?'selected':'' ?>><?= $n ?></option><?php endfor ?></select></div>
 <div class="field"><label for="condition">Stan mieszkania</label><select id="condition" name="condition"><?php foreach ($conditionLabels as $key=>$label): ?><option value="<?= $key ?>" <?= $input['condition']===$key?'selected':'' ?>><?= homes_e($label) ?></option><?php endforeach ?></select></div>
-<div class="field"><label for="asking">Cena zakupu / ofertowa, zł</label><input id="asking" name="asking" type="number" min="0" max="10000000" placeholder="Opcjonalnie" value="<?= homes_e($input['asking']) ?>"></div>
-<div class="field"><label for="renovation">Szacowany koszt remontu, zł</label><input id="renovation" name="renovation" type="number" min="0" max="10000000" placeholder="Wymagany do symulacji po remoncie" value="<?= homes_e($input['renovation']) ?>"></div>
-<div class="field"><label for="costs">Pozostałe koszty, zł</label><input id="costs" name="costs" type="number" min="0" max="10000000" placeholder="Podatek, notariusz, prowizje..." value="<?= homes_e($input['costs']) ?>"></div>
-</div><p><button class="button" type="submit">Oblicz wycenę →</button></p></form></section>
-<?php if ($result): ?><section class="card" id="wynik"><div class="eyebrow">WYNIK ANALIZY</div><h2 class="result-title"><?= $result['available'] ? 'Orientacyjna wartość' : 'Za mało danych do wyceny' ?></h2>
-<?php if ($result['available']): ?><p class="hint"><?= homes_e($result['scope']) ?> · <?= (int)$result['count'] ?> transakcji · <?= homes_e($result['from']) ?>–<?= homes_e($result['to']) ?> · RCN pobrano <?= homes_e($result['synced_at'] ?? 'brak daty') ?> UTC</p>
-<div class="metrics"><div class="metric primary"><span>Scenariusz: <?= homes_e($conditionLabels[$input['condition']]) ?></span><strong><?= valuation_money($estimate) ?></strong></div><div class="metric"><span>Zakres cen porównawczych (20–80 percentyl)</span><strong><?= valuation_money($result['low']) ?> – <?= valuation_money($result['high']) ?></strong></div><div class="metric"><span>Mediana transakcji</span><strong><?= valuation_money($result['median']) ?></strong><small><?= valuation_money($result['price_m2']) ?>/m²</small></div></div>
-<div class="range"><i style="left:50%"></i></div><div class="range-labels"><span><?= valuation_money($result['low']) ?></span><span>mediana</span><span><?= valuation_money($result['high']) ?></span></div>
-<p class="note">Stan lokalu nie jest podany w RCN. „Do remontu” używa dolnego kwartyla cen, stan dobry mediany, a bardzo dobry górnego kwartyla. To scenariusze, nie zmierzone korekty za stan. Piętro, budynek, standard i prawa związane z lokalem mogą istotnie zmienić cenę.</p>
-<?php if ($asking !== null): ?><h3>Porównanie z ceną zakupu</h3><div class="metrics"><div class="metric"><span>Cena zakupu / ofertowa</span><strong><?= valuation_money($asking) ?></strong></div><div class="metric"><span>Scenariusz sprzedaży<?= $input['condition']==='remont'?' po remoncie':'' ?></span><strong><?= valuation_money($resale) ?></strong></div><div class="metric"><span>Różnica po kosztach</span><strong class="<?= $spread !== null ? ($spread >= 0 ? 'positive' : 'negative') : '' ?>"><?= valuation_money($spread) ?></strong></div></div><p class="hint">Różnica = scenariusz sprzedaży − cena zakupu − koszt remontu − pozostałe koszty. To nie jest prognoza zysku ani gwarantowana cena sprzedaży.<?php if ($input['condition']==='remont' && $renovation === null): ?> Wpisz koszt remontu, aby policzyć różnicę.<?php endif ?></p><?php endif ?>
-<p><a href="rcn_market.php?area=<?= rawurlencode((string)$result['area']) ?><?= $result['street'] !== '' ? '&amp;street=' . rawurlencode($result['street']) : '' ?>">Zobacz porównywane transakcje →</a></p>
-<?php else: ?><p><?= $result['reason'] === 'unknown_street' ? 'Nie udało się odnaleźć wskazanej ulicy w bazie adresowej GUGiK.' : ('W ostatnich 24 miesiącach znaleziono ' . (int)$result['count'] . ' transakcji w promieniu 500 m o metrażu ±20%. Wynik wymaga co najmniej 5 transakcji.') ?></p><?php endif ?></section><?php endif ?>
-<p class="hint">Źródło: <a href="https://www.geoportal.gov.pl/pl/dane/rejestr-cen-nieruchomosci-rcn/" target="_blank" rel="noopener noreferrer">GUGiK, Rejestr Cen Nieruchomości</a>. Położenie ulicy pochodzi z usługi adresowej GUGiK. Uwzględniono lokale mieszkalne z rynku wtórnego w Kwidzynie, sprzedane w ostatnich 24 miesiącach, do 500 m od ulicy i o metrażu ±20%. Rejestr może być aktualizowany z opóźnieniem.</p>
+<div class="field"><label for="asking">Cena w ogłoszeniu (zł)</label><input id="asking" name="asking" type="number" min="0" max="10000000" placeholder="Jeśli znana" value="<?= homes_e($input['asking']) ?>"></div>
+<div class="field"><label for="renovation">Planowany remont (zł)</label><input id="renovation" name="renovation" type="number" min="0" max="10000000" placeholder="Wpisz 0, jeśli nie planujesz" value="<?= homes_e($input['renovation']) ?>"></div>
+<div class="field"><label for="costs">Inne koszty (zł)</label><input id="costs" name="costs" type="number" min="0" max="10000000" placeholder="Podatek, notariusz..." value="<?= homes_e($input['costs']) ?>"></div>
+</div><p><button class="button" type="submit">Porównaj ceny →</button></p></form></section>
+<?php if ($market): $rcn=$market['rcn']; $offers=$market['listings']; ?>
+<section class="card" id="wynik"><div class="eyebrow">KROK 2</div><h2>Co mówią ceny?</h2>
+<div class="metrics"><div class="metric"><span>Sprzedane mieszkania · RCN</span><strong><?= valuation_money($market['rcn_value']) ?></strong><small><?= (int)$rcn['count'] ?> porównywalnych transakcji · <?= homes_e($rcn['scope']) ?></small></div>
+<div class="metric"><span>Ceny z ogłoszeń</span><strong><?= valuation_money($market['listing_value']) ?></strong><small><?= (int)$offers['count'] ?> porównywalnych ofert · <?= homes_e($offers['scope']) ?></small></div>
+<div class="metric primary"><span><?= $market['basis']==='both'?'Wartość referencyjna':'Wycena częściowa' ?></span><strong><?= valuation_money($market['estimate']) ?></strong><small><?= $market['basis']==='both'?'Mediana RCN w zakresie zgodnym z ofertami':'Źródła nie dają wspólnego zakresu' ?></small></div></div>
+<?php if ($market['basis'] !== 'both'): ?><p class="notice"><?= $market['basis']==='conflict'?'Zakresy cen ofertowych i transakcyjnych nie pokrywają się. Dane wskazują rozbieżność; potrzebna jest weryfikacja konkretnego mieszkania.':('Nie ma pełnego porównania obu źródeł. ' . (!$rcn['available'] ? ($rcn['reason']==='unknown_street'?'Nie znaleziono ulicy w usłudze adresowej GUGiK. ':'RCN: mniej niż 5 pasujących transakcji lub brak danych. ') : '') . (!$offers['available']?'Oferty: mniej niż 5 pasujących ogłoszeń.':'')) ?> Bez zgodnych danych nie wyznaczamy argumentu cenowego do sprzedawcy.</p><?php endif ?>
+<p class="hint">Wartość referencyjna to mediana transakcji RCN ograniczona wspólnym zakresem 20.–80. percentyla RCN i ofert. Stan mieszkania nie koryguje tej wartości: źródła nie zawierają porównywalnej oceny standardu. Wpisany remont jest pokazany osobno w budżecie.</p>
+<details><summary>Zakres danych i metoda</summary><p>Wspólny zakres: <?= $market['basis']==='both' ? valuation_money($market['joint_low']) . '–' . valuation_money($market['joint_high']) : 'brak' ?>. RCN: <?= $rcn['available'] ? valuation_money($rcn['low']) . '–' . valuation_money($rcn['high']) . ' (20.–80. percentyl), ' . homes_e($rcn['from']) . '–' . homes_e($rcn['to']) : 'brak wystarczających danych' ?>. Oferty: <?= $offers['available'] ? valuation_money($offers['low']) . '–' . valuation_money($offers['high']) . ' (20.–80. percentyl)' : 'brak wystarczających danych' ?>. Ogłoszenia pokazują ceny oczekiwane, a nie ceny sprzedaży. Podobna powierzchnia i okolica nie gwarantują podobnego standardu.</p><p><a href="rcn_market.php?area=<?= rawurlencode($input['area']) ?>&amp;street=<?= rawurlencode($input['street']) ?>">Zobacz transakcje użyte w analizie →</a></p></details></section>
+<?php if ($asking !== null): ?><section class="card" id="decyzja"><div class="eyebrow">KROK 3</div><h2>Czy cena jest za wysoka?</h2>
+<div class="metrics"><div class="metric"><span>Cena w ogłoszeniu</span><strong><?= valuation_money($asking) ?></strong></div><div class="metric"><span>Robocza wycena</span><strong><?= valuation_money($market['estimate']) ?></strong></div><div class="metric"><span>Różnica po wpisanych kosztach</span><strong class="<?= $spread===null?'':($spread>=0?'good':'bad') ?>"><?= valuation_money($spread) ?></strong></div></div>
+<p class="hint">Różnica = wycena − cena ogłoszenia − remont − inne koszty. Nie jest prognozą zysku; nie uwzględnia kosztów sprzedaży, finansowania i podatków, jeśli ich nie wpiszesz.<?php if ($input['condition']==='remont' && $renovation===null): ?> Wpisz koszt remontu, aby ją policzyć.<?php endif ?></p>
+<?php if ($talk && $talk['high']): ?><h3>Argumenty za niższą ceną</h3><ul><?php foreach ($talk['reasons'] as $reason): ?><li><?= homes_e($reason) ?></li><?php endforeach ?></ul><p class="hint">Propozycja <?= valuation_money($talk['target']) ?> opiera się na medianie transakcji w zakresie potwierdzonym przez oferty, a nie na gwarantowanej cenie sprzedaży. Zweryfikuj stan i dokumenty podczas oględzin.</p><h3>Szkic wiadomości do sprzedawcy</h3><textarea readonly aria-label="Szkic wiadomości do sprzedawcy"><?= homes_e($talk['draft']) ?></textarea><p class="hint">Skopiuj i dostosuj po sprawdzeniu mieszkania. Panel nie wysyła wiadomości.</p>
+<?php elseif ($market['basis']==='both'): ?><p class="notice">Cena nie przekracza 80. percentyla jednocześnie w obu źródłach. Same dane cenowe nie dają mocnego argumentu do obniżki. Po oględzinach możesz dodać udokumentowane koszty lub wady.</p><?php else: ?><p class="notice">Do propozycji ceny potrzebne są oba źródła i zgodne zakresy porównawcze.</p><?php endif ?></section><?php endif ?>
+<?php endif ?>
+<p class="hint">Źródła: <a href="https://www.geoportal.gov.pl/pl/dane/rejestr-cen-nieruchomosci-rcn/" target="_blank" rel="noopener noreferrer">GUGiK, Rejestr Cen Nieruchomości ↗</a> oraz oferty zapisane w monitorze IFS. Dane RCN mogą być publikowane z opóźnieniem; aktualność ogłoszeń potwierdź w portalach.</p>
 </main></body></html>
