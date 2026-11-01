@@ -29,3 +29,9 @@ Plik `config.php` i katalog `data/` są blokowane przez reguły `.htaccess`. Prz
 - Oznaczenie scenariusza jako „do sprawdzenia”, gdy szacowana nadwyżka wynosi co najmniej 15 tys. zł; priorytet od 25 tys. zł.
 
 Skan działa w harmonogramie serwera i pokazuje ostatni wynik każdego źródła. Portale mogą zmieniać układ stron lub blokować automatyczne pobieranie; błąd źródła jest wtedy widoczny w panelu. Link z prywatnej grupy można zapisać ręcznie.
+
+## Mieszkania Kwidzyn: ceny transakcyjne RCN
+
+`mieszkania/rcn_sync.php` pobiera lokale z oficjalnej usługi WFS GUGiK `https://mapy.geoportal.gov.pl/wss/service/rcn`. Wybiera lokale mieszkalne z miasta Kwidzyn (TERYT gminy `220701_1`), transakcje wolnorynkowe i odrzuca wpisy bez wiarygodnej ceny pojedynczego lokalu. Dotychczasowe dane zostają zachowane, jeśli pobranie się nie powiedzie. Na serwerze IFS zadanie działa codziennie: `17 3 * * * /usr/local/bin/php /home/ifs/public_html/ifs-poland.com/ifskampery/mieszkania/rcn_sync.php >> /home/ifs/ifs-rcn-kwidzyn.log 2>&1`.
+
+W `mieszkania/watch.php` porównanie RCN używa mediany cen za m² transakcji z rynku wtórnego z ostatnich 24 miesięcy i lokali o powierzchni ±20%. Wynik jest scenariuszem dla miasta, a nie wyceną konkretnego lokalu: nie uwzględnia standardu, kondygnacji, budynku, praw do nieruchomości ani opóźnienia publikacji RCN. Panel pokazuje liczbę i daty transakcji oraz oddzielnie porównanie cen ofertowych. Historia ogłoszenia ignoruje dawne pozorne zmiany metrażu wynikające z zapisu `45.0` i `45`.
