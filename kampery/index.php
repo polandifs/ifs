@@ -86,6 +86,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $logged = !empty($_SESSION['auth']);
 $edit = null;
 $listings = [];
+$discoveries = [];
+$scanRuns = [];
 if ($logged) {
     $editId = filter_var($_GET['edit'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
     if ($editId) {
@@ -94,6 +96,8 @@ if ($logged) {
         $edit = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     }
     $listings = db()->query("SELECT * FROM listings ORDER BY CASE status WHEN 'nowa' THEN 0 WHEN 'sprawdzana' THEN 1 ELSE 2 END, updated_at DESC, id DESC")->fetchAll(PDO::FETCH_ASSOC);
+    $discoveries = db()->query("SELECT * FROM discoveries ORDER BY CASE WHEN signal <> '' THEN 0 ELSE 1 END, first_seen DESC LIMIT 100")->fetchAll(PDO::FETCH_ASSOC);
+    $scanRuns = db()->query("SELECT r.* FROM scan_runs r JOIN (SELECT source, MAX(id) id FROM scan_runs GROUP BY source) latest ON r.id = latest.id ORDER BY r.source")->fetchAll(PDO::FETCH_ASSOC);
 }
 
 function field(?array $row, string $name, string $fallback = ''): string { return h(isset($row[$name]) ? (string)$row[$name] : $fallback); }
@@ -115,10 +119,11 @@ function field(?array $row, string $name, string $fallback = ''): string { retur
     <section class="card login"><h2>Logowanie</h2><form method="post"><input type="hidden" name="csrf" value="<?= csrf_token($config) ?>"><label>Hasło<input type="password" name="password" required autocomplete="current-password"></label><button name="action" value="login">Wejdź do panelu</button></form></section>
   <?php else: ?>
     <div class="summary"><div><span>Zapisane oferty</span><strong><?= count($listings) ?></strong></div><div><span>Próg do sprawdzenia</span><strong>15 000 zł</strong></div><div><span>Priorytet</span><strong>25 000 zł</strong></div></div>
-    <section id="search" class="card"><div class="section-head"><div><p class="eyebrow">ODKRYWANIE</p><h2>Publiczne ogłoszenia</h2></div><span class="muted">Wyniki wymagają ręcznego sprawdzenia</span></div>
-      <form method="post" class="search-form"><input type="hidden" name="csrf" value="<?= csrf_token($config) ?>"><label>Kraj<select name="search_country"><option value="PL">Polska</option><option value="DE">Niemcy</option><option value="NL">Holandia</option><option value="BE">Belgia</option></select></label><label>Źródło<select name="search_source"><option value="portals">Portale ogłoszeniowe</option><option value="facebook">Publiczne wyniki Facebooka</option></select></label><button name="action" value="search" <?= empty($config['serpapi_key']) ? 'disabled' : '' ?>>Szukaj</button></form>
-      <?php if (empty($config['serpapi_key'])): ?><p class="hint">Wyszukiwanie uruchomisz po wpisaniu klucza SerpAPI w konfiguracji. Linki z Facebooka dodawaj przez formularz poniżej.</p><?php endif; ?>
-      <?php foreach (($_SESSION['search_results'] ?? []) as $result): ?><?php $url = (string)($result['link'] ?? ''); if (!filter_var($url, FILTER_VALIDATE_URL) || !in_array(strtolower((string)parse_url($url, PHP_URL_SCHEME)), ['http', 'https'], true)) continue; ?><div class="result"><div><a href="<?= h($url) ?>" target="_blank" rel="noopener noreferrer"><?= h((string)($result['title'] ?? 'Ogłoszenie')) ?></a><p><?= h((string)($result['snippet'] ?? '')) ?></p></div><a class="small-button" href="?add_url=<?= rawurlencode($url) ?>&amp;add_title=<?= rawurlencode((string)($result['title'] ?? '')) ?>&amp;add_country=<?= h((string)($_SESSION['search_country'] ?? 'PL')) ?>#form">Dodaj do analizy</a></div><?php endforeach; ?>
+    <section id="search" class="card"><div class="section-head"><div><p class="eyebrow">ODKRYWANIE</p><h2>Automatycznie znalezione ogłoszenia</h2></div><span class="muted">Skan cykliczny · stan i cena do potwierdzenia</span></div>
+      <?php if (!$scanRuns): ?><p class="hint">Pierwszy skan jeszcze się nie zakończył.</p><?php endif; ?>
+      <?php foreach ($scanRuns as $run): ?><p class="hint"><?= h($run['source']) ?>: <?= h($run['scanned_at']) ?> UTC · <?= (int)$run['found'] ?> wyników<?= $run['error'] ? ' · ' . h($run['error']) : '' ?></p><?php endforeach; ?>
+      <?php if (!$discoveries): ?><p class="empty">Nie znaleziono jeszcze kandydatów.</p><?php endif; ?>
+      <?php foreach ($discoveries as $result): ?><div class="result"><div><a href="<?= h($result['url']) ?>" target="_blank" rel="noopener noreferrer"><?= h($result['title']) ?></a><p><?= h($result['country']) ?> · <?= h($result['source']) ?><?= $result['price_text'] ? ' · Cena z listy: ' . h($result['price_text']) : '' ?><?= $result['signal'] ? ' · Sygnał: ' . h($result['signal']) : '' ?> · Wykryto: <?= h($result['first_seen']) ?> UTC</p></div><a class="small-button" href="?add_url=<?= rawurlencode($result['url']) ?>&amp;add_title=<?= rawurlencode($result['title']) ?>&amp;add_country=<?= h($result['country']) ?>#form">Analizuj</a></div><?php endforeach; ?>
     </section>
     <section id="form" class="card"><div class="section-head"><div><p class="eyebrow">ANALIZA</p><h2><?= $edit ? 'Edytuj ofertę' : 'Dodaj ofertę' ?></h2></div><?php if ($edit): ?><a href="index.php#form">Nowa oferta</a><?php endif; ?></div>
       <form method="post" class="listing-form"><input type="hidden" name="csrf" value="<?= csrf_token($config) ?>"><input type="hidden" name="id" value="<?= field($edit, 'id') ?>">
