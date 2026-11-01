@@ -43,15 +43,16 @@ function market_valuation(PDO $db, float $area, string $street, ?int $rooms = nu
     if ($rcnValue !== null && $listingValue !== null) {
         $jointLow = max($rcn['low'], $listings['low']);
         $jointHigh = min($rcn['high'], $listings['high']);
-        if ($jointLow <= $jointHigh) {
-            $estimate = max($jointLow, min($jointHigh, $rcnValue));
-            $basis = 'both';
-        } else $basis = 'conflict';
+        // Asking and sale prices are different observations; do not manufacture a weighted point estimate.
+        $estimate = $rcnValue;
+        $basis = 'both';
     } elseif ($rcnValue !== null) { $estimate = $rcnValue; $basis = 'rcn'; }
     elseif ($listingValue !== null) { $estimate = $listingValue; $basis = 'listings'; }
     return ['rcn'=>$rcn, 'listings'=>$listings, 'rcn_value'=>$rcnValue,
         'listing_value'=>$listingValue, 'estimate'=>$estimate, 'basis'=>$basis,
-        'joint_low'=>$basis==='both'?$jointLow:null, 'joint_high'=>$basis==='both'?$jointHigh:null];
+        'joint_low'=>$basis==='both' && $jointLow <= $jointHigh?$jointLow:null,
+        'joint_high'=>$basis==='both' && $jointLow <= $jointHigh?$jointHigh:null,
+        'ranges_overlap'=>$basis==='both' && $jointLow <= $jointHigh];
 }
 
 function market_negotiation(array $market, ?int $asking, ?int $renovation = null, int $otherCosts = 0): ?array {
