@@ -4,7 +4,7 @@ Prywatny panel do gromadzenia ofert kamperów i przyczep oraz szacowania wyniku 
 
 ## Wymagania
 
-- PHP 8.1+ z PDO SQLite, cURL i mbstring.
+- PHP 7.4+ z PDO SQLite, cURL i mbstring.
 - Hosting HTTPS.
 - Katalog `data/` zapisywalny przez PHP.
 
