@@ -77,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: index.php#search'); exit;
         }
     } catch (PDOException $e) {
-        $error = str_contains($e->getMessage(), 'UNIQUE') ? 'Ten adres ogłoszenia jest już zapisany.' : 'Błąd bazy danych. Sprawdź uprawnienia katalogu data/.';
+        $error = strpos($e->getMessage(), 'UNIQUE') !== false ? 'Ten adres ogłoszenia jest już zapisany.' : 'Błąd bazy danych. Sprawdź uprawnienia katalogu data/.';
     } catch (Throwable $e) {
         $error = $e->getMessage();
     }
@@ -96,7 +96,7 @@ if ($logged) {
     $listings = db()->query("SELECT * FROM listings ORDER BY CASE status WHEN 'nowa' THEN 0 WHEN 'sprawdzana' THEN 1 ELSE 2 END, updated_at DESC, id DESC")->fetchAll(PDO::FETCH_ASSOC);
 }
 
-function field(array|null $row, string $name, string $fallback = ''): string { return h(isset($row[$name]) ? (string)$row[$name] : $fallback); }
+function field(?array $row, string $name, string $fallback = ''): string { return h(isset($row[$name]) ? (string)$row[$name] : $fallback); }
 ?>
 <!doctype html>
 <html lang="pl">
