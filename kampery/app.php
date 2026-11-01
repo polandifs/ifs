@@ -62,6 +62,22 @@ function db(): PDO
         added INTEGER NOT NULL DEFAULT 0,
         error TEXT NOT NULL DEFAULT ''
     )");
+    $db->exec("CREATE TABLE IF NOT EXISTS facebook_groups (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        url TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        checked_at TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'Jeszcze nie sprawdzono'
+    )");
+    $seedGroup = $db->prepare('INSERT OR IGNORE INTO facebook_groups (id,name,url) VALUES (?,?,?)');
+    foreach ([
+        ['963050657177584', 'Camping i Caravaning Polska'],
+        ['1229083213888780', 'Kampery PL'],
+        ['2086464588530739', 'Kampery i Kampervany na Sprzedaż – Ogłoszenia Polska'],
+    ] as [$groupId, $groupName]) {
+        $seedGroup->execute([$groupId, $groupName, 'https://www.facebook.com/groups/' . $groupId . '/']);
+    }
     $db->exec("CREATE TABLE IF NOT EXISTS price_drops (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         url TEXT NOT NULL,
