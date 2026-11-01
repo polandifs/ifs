@@ -32,7 +32,7 @@ if ($home['source'] === 'Adradar' && $db->query("SELECT COUNT(*) FROM sqlite_mas
     $importedLinks->execute([$url]);
     $adradarLinks = $importedLinks->fetchAll(PDO::FETCH_ASSOC);
 }
-$prices = $db->prepare('SELECT old_price,new_price,changed_at,id FROM price_history WHERE url=? ORDER BY id DESC LIMIT 100');
+$prices = $db->prepare('SELECT old_price,new_price,changed_at,id FROM price_history WHERE url=? AND old_price BETWEEN 1 AND 100000000 AND new_price BETWEEN 1 AND 100000000 ORDER BY id DESC LIMIT 100');
 $prices->execute([$url]);
 $priceChanges = $prices->fetchAll(PDO::FETCH_ASSOC);
 $events = $db->prepare('SELECT kind,old_value,new_value,occurred_at,id FROM offer_events WHERE url=? ORDER BY id DESC LIMIT 1000');
@@ -51,7 +51,7 @@ foreach ($fieldChanges as $change) {
     ];
 }
 usort($timeline, static fn(array $a, array $b): int => strcmp($b['time'], $a['time']) ?: ($b['id'] <=> $a['id']));
-$initialPrice = $db->prepare('SELECT old_price FROM price_history WHERE url=? ORDER BY id ASC LIMIT 1');
+$initialPrice = $db->prepare('SELECT old_price FROM price_history WHERE url=? AND old_price BETWEEN 1 AND 100000000 ORDER BY id ASC LIMIT 1');
 $initialPrice->execute([$url]);
 $savedInitialPrice = $initialPrice->fetchColumn();
 $hadPriceAdded = false;
