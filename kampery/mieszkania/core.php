@@ -67,6 +67,7 @@ function homes_html_offers(string $html, string $source): array {
             for ($i = 0; $i < 3; $i++) $parts[] = str_replace(["\xc2\xa0", ' '], '', trim($bold->item($i)->textContent));
             $url = 'https://adresowo.pl' . $link->getAttribute('href');
             $title = $image ? $image->getAttribute('alt') : 'Mieszkanie Kwidzyn';
+            if (!preg_match('/\bKwidzyn\b/u', $title)) continue;
             $price = ctype_digit($parts[0]) ? (int)$parts[0] : null;
             $area = is_numeric(str_replace(',', '.', $parts[1])) ? (float)str_replace(',', '.', $parts[1]) : null;
             $rooms = ctype_digit($parts[2]) ? (int)$parts[2] : null;
