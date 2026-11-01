@@ -89,6 +89,10 @@ $listings = [];
 $discoveries = [];
 $scanRuns = [];
 $priceDrops = [];
+$selected = null;
+$selectedPrice = '';
+$selectedCurrency = 'PLN';
+$selectedSavedId = null;
 if ($logged) {
     $editId = filter_var($_GET['edit'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
     if ($editId) {
@@ -101,6 +105,23 @@ if ($logged) {
     $scanRuns = db()->query("SELECT r.* FROM scan_runs r JOIN (SELECT source, MAX(id) id FROM scan_runs GROUP BY source) latest ON r.id = latest.id ORDER BY r.source")->fetchAll(PDO::FETCH_ASSOC);
     foreach (db()->query('SELECT * FROM price_drops ORDER BY id DESC LIMIT 100')->fetchAll(PDO::FETCH_ASSOC) as $drop) {
         if (!isset($priceDrops[$drop['url']])) $priceDrops[$drop['url']] = $drop;
+    }
+    $analyzeUrl = (string)($_GET['analyze'] ?? '');
+    if ($analyzeUrl !== '') {
+        $stmt = db()->prepare('SELECT * FROM discoveries WHERE url = ?');
+        $stmt->execute([$analyzeUrl]);
+        $selected = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        if ($selected) {
+            $selectedCurrency = preg_match('/€|EUR/u', $selected['price_text']) ? 'EUR' : 'PLN';
+            if (preg_match('/(\d[\d\s.,]*)/u', $selected['price_text'], $matches)) {
+                $pricePart = preg_replace('/[,.]\d{2}$/', '', trim($matches[1]));
+                $digits = preg_replace('/\D/u', '', $pricePart);
+                if ($digits !== '' && (int)$digits > 0) $selectedPrice = (string)(int)$digits;
+            }
+            $stmt = db()->prepare('SELECT id FROM listings WHERE url = ?');
+            $stmt->execute([$selected['url']]);
+            $selectedSavedId = $stmt->fetchColumn() ?: null;
+        }
     }
 }
 
@@ -122,23 +143,33 @@ function field(?array $row, string $name, string $fallback = ''): string { retur
   <?php if (!$logged): ?>
     <section class="card login"><h2>Logowanie</h2><form method="post"><input type="hidden" name="csrf" value="<?= csrf_token($config) ?>"><label>Hasło<input type="password" name="password" required autocomplete="current-password"></label><button name="action" value="login">Wejdź do panelu</button></form></section>
   <?php else: ?>
+    <?php if (isset($_GET['analyze']) && !$selected): ?><div class="alert error" role="alert">Nie znaleziono tej oferty w aktualnych wynikach skanowania.</div><?php endif; ?>
+    <?php if ($selected): ?>
+    <section id="analysis" class="card selected-analysis" tabindex="-1">
+      <div class="section-head"><div><p class="eyebrow">WYBRANA OFERTA</p><h2>Wstępna analiza</h2></div><a href="index.php#search">Wróć do wyników</a></div>
+      <h3><?= h($selected['title']) ?></h3>
+      <div class="analysis-facts"><div><span>Cena z ostatniego skanu</span><strong><?= $selected['price_text'] ? h($selected['price_text']) : 'Nie odczytano' ?></strong></div><div><span>Sygnał</span><strong><?= $selected['signal'] ? h($selected['signal']) : 'Brak sygnału cenowego' ?></strong></div><div><span>Źródło i data</span><strong><?= h($selected['source']) ?> · <?= h($selected['last_seen']) ?> UTC</strong></div></div>
+      <p class="hint">To kandydat do sprawdzenia. Cena i dostępność mogą się zmienić; porównanie statystyczne nie uwzględnia stanu, wyposażenia ani kosztu naprawy.</p>
+      <div class="analysis-actions"><a class="small-button" href="<?= h($selected['url']) ?>" target="_blank" rel="noopener noreferrer">Otwórz ogłoszenie</a><?php if ($selectedSavedId): ?><a class="small-button secondary" href="?edit=<?= (int)$selectedSavedId ?>#form">Otwórz zapisaną kalkulację</a><?php elseif ($selectedPrice !== '' && $selectedCurrency === 'PLN'): ?><a class="small-button secondary" href="#form">Uzupełnij koszty i zapisz kalkulację</a><?php else: ?><a class="small-button secondary" href="#form">Wpisz cenę i koszty</a><?php endif; ?></div>
+    </section>
+    <?php endif; ?>
     <div class="summary"><div><span>Zapisane oferty</span><strong><?= count($listings) ?></strong></div><div><span>Próg do sprawdzenia</span><strong>15 000 zł</strong></div><div><span>Priorytet</span><strong>25 000 zł</strong></div></div>
     <section id="search" class="card"><div class="section-head"><div><p class="eyebrow">ODKRYWANIE</p><h2>Automatycznie znalezione ogłoszenia</h2></div><span class="muted">Skan cykliczny · stan i cena do potwierdzenia</span></div>
       <p class="hint">Porównanie cen korzysta z publicznego eksportu WybierzKampera. Medianę liczymy dla typu, pięcioletniego przedziału roczników i zbliżonego przebiegu; nie uwzględnia stanu, wyposażenia ani kosztu naprawy.</p>
       <?php if (!$scanRuns): ?><p class="hint">Pierwszy skan jeszcze się nie zakończył.</p><?php endif; ?>
       <?php foreach ($scanRuns as $run): ?><p class="hint"><?= h($run['source']) ?>: <?= h($run['scanned_at']) ?> UTC · <?= (int)$run['found'] ?> wyników<?= $run['error'] ? ' · ' . h($run['error']) : '' ?></p><?php endforeach; ?>
       <?php if (!$discoveries): ?><p class="empty">Nie znaleziono jeszcze kandydatów.</p><?php endif; ?>
-      <?php foreach ($discoveries as $result): ?><div class="result"><div><a href="<?= h($result['url']) ?>" target="_blank" rel="noopener noreferrer"><?= h($result['title']) ?></a><p><?= h($result['country']) ?> · <?= h($result['source']) ?><?= $result['price_text'] ? ' · Cena z listy, niepotwierdzona: ' . h($result['price_text']) : '' ?><?= $result['signal'] ? ' · Sygnał: ' . h($result['signal']) : '' ?><?= isset($priceDrops[$result['url']]) ? ' · Obniżka z ' . h($priceDrops[$result['url']]['old_price']) : '' ?> · Wykryto: <?= h($result['first_seen']) ?> UTC</p></div><a class="small-button" href="?add_url=<?= rawurlencode($result['url']) ?>&amp;add_title=<?= rawurlencode($result['title']) ?>&amp;add_country=<?= h($result['country']) ?>#form">Analizuj</a></div><?php endforeach; ?>
+      <?php foreach ($discoveries as $result): ?><div class="result"><div><a href="<?= h($result['url']) ?>" target="_blank" rel="noopener noreferrer"><?= h($result['title']) ?></a><p><?= h($result['country']) ?> · <?= h($result['source']) ?><?= $result['price_text'] ? ' · Cena z listy, niepotwierdzona: ' . h($result['price_text']) : '' ?><?= $result['signal'] ? ' · Sygnał: ' . h($result['signal']) : '' ?><?= isset($priceDrops[$result['url']]) ? ' · Obniżka z ' . h($priceDrops[$result['url']]['old_price']) : '' ?> · Wykryto: <?= h($result['first_seen']) ?> UTC</p></div><a class="small-button" href="?analyze=<?= rawurlencode($result['url']) ?>#analysis">Analizuj</a></div><?php endforeach; ?>
     </section>
     <section id="form" class="card"><div class="section-head"><div><p class="eyebrow">ANALIZA</p><h2><?= $edit ? 'Edytuj ofertę' : 'Dodaj ofertę' ?></h2></div><?php if ($edit): ?><a href="index.php#form">Nowa oferta</a><?php endif; ?></div>
       <form method="post" class="listing-form"><input type="hidden" name="csrf" value="<?= csrf_token($config) ?>"><input type="hidden" name="id" value="<?= field($edit, 'id') ?>">
-        <label class="wide">Link do ogłoszenia<input type="url" name="url" required maxlength="2048" value="<?= field($edit, 'url', (string)($_GET['add_url'] ?? '')) ?>"></label>
-        <label class="wide">Tytuł<input name="title" required maxlength="180" value="<?= field($edit, 'title', (string)($_GET['add_title'] ?? '')) ?>"></label>
-        <label>Kraj<select name="country"><?php foreach (['PL'=>'Polska','DE'=>'Niemcy','NL'=>'Holandia','BE'=>'Belgia'] as $code=>$label): ?><option value="<?= $code ?>" <?= (($edit['country'] ?? $_GET['add_country'] ?? 'PL') === $code) ? 'selected' : '' ?>><?= $label ?></option><?php endforeach; ?></select></label>
+        <label class="wide">Link do ogłoszenia<input type="url" name="url" required maxlength="2048" value="<?= field($edit, 'url', (string)($selected['url'] ?? $_GET['add_url'] ?? '')) ?>"></label>
+        <label class="wide">Tytuł<input name="title" required maxlength="180" value="<?= field($edit, 'title', (string)($selected['title'] ?? $_GET['add_title'] ?? '')) ?>"></label>
+        <label>Kraj<select name="country"><?php foreach (['PL'=>'Polska','DE'=>'Niemcy','NL'=>'Holandia','BE'=>'Belgia'] as $code=>$label): ?><option value="<?= $code ?>" <?= (($edit['country'] ?? $selected['country'] ?? $_GET['add_country'] ?? 'PL') === $code) ? 'selected' : '' ?>><?= $label ?></option><?php endforeach; ?></select></label>
         <label>Rodzaj<select name="kind"><option value="kamper" <?= (($edit['kind'] ?? '') === 'kamper') ? 'selected' : '' ?>>Kamper</option><option value="przyczepa" <?= (($edit['kind'] ?? '') === 'przyczepa') ? 'selected' : '' ?>>Przyczepa</option></select></label>
         <label>Status<select name="status"><?php foreach (['nowa'=>'Nowa','sprawdzana'=>'Sprawdzana','odrzucona'=>'Odrzucona','kupiona'=>'Kupiona','sprzedana'=>'Sprzedana'] as $code=>$label): ?><option value="<?= $code ?>" <?= (($edit['status'] ?? 'nowa') === $code) ? 'selected' : '' ?>><?= $label ?></option><?php endforeach; ?></select></label>
-        <label>Waluta<select name="currency"><option value="PLN" <?= (($edit['currency'] ?? 'PLN') === 'PLN') ? 'selected' : '' ?>>PLN</option><option value="EUR" <?= (($edit['currency'] ?? '') === 'EUR') ? 'selected' : '' ?>>EUR</option></select></label>
-        <label>Cena ofertowa<input type="number" name="asking_price" min="0.01" step="0.01" required value="<?= field($edit, 'asking_price') ?>"></label>
+        <label>Waluta<select name="currency"><option value="PLN" <?= (($edit['currency'] ?? $selectedCurrency) === 'PLN') ? 'selected' : '' ?>>PLN</option><option value="EUR" <?= (($edit['currency'] ?? $selectedCurrency) === 'EUR') ? 'selected' : '' ?>>EUR</option></select></label>
+        <label>Cena ofertowa<input type="number" name="asking_price" min="0.01" step="0.01" required value="<?= field($edit, 'asking_price', $selectedPrice) ?>"></label>
         <label>Kurs EUR/PLN, wpisany ręcznie<input type="number" name="eur_rate" min="0.0001" step="0.0001" value="<?= field($edit, 'eur_rate') ?>"></label>
         <label>Cena po negocjacji <small>założenie</small><input type="number" name="negotiated_price" min="0" step="0.01" value="<?= field($edit, 'negotiated_price') ?>"></label>
         <label>Naprawa, zł<input type="number" name="repair_cost" min="0" step="0.01" value="<?= field($edit, 'repair_cost', '0') ?>"></label>
