@@ -13,6 +13,14 @@ header('Cache-Control: no-store');
 if (empty($_SESSION['auth'])) { header('Location: index.php'); exit; }
 
 $database = db();
+$facebookCount = (int)$database->query("SELECT COUNT(*) FROM discoveries WHERE source LIKE 'Facebook%'")->fetchColumn();
+$facebookPage = filter_var($_GET['fb_page'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 1;
+$facebookPageCount = max(1, (int)ceil($facebookCount / 40));
+$facebookPage = min($facebookPage, $facebookPageCount);
+$facebookStmt = $database->prepare("SELECT url,title,source,price_text,first_seen FROM discoveries WHERE source LIKE 'Facebook%' ORDER BY first_seen DESC, url DESC LIMIT 40 OFFSET :offset");
+$facebookStmt->bindValue(':offset', ($facebookPage - 1) * 40, PDO::PARAM_INT);
+$facebookStmt->execute();
+$facebookOffers = $facebookStmt->fetchAll(PDO::FETCH_ASSOC);
 $types = $database->query("SELECT type, COUNT(*) AS total FROM catalog_offers WHERE type <> '' GROUP BY type ORDER BY total DESC")->fetchAll(PDO::FETCH_ASSOC);
 $typeNames = array_column($types, 'type');
 $type = (string)($_GET['type'] ?? '');
@@ -64,6 +72,7 @@ $overview = $database->query("SELECT COUNT(*) total, SUM(CASE WHEN condition = '
 $prices = $database->query("SELECT price_pln FROM catalog_offers WHERE price_pln > 0 ORDER BY price_pln")->fetchAll(PDO::FETCH_COLUMN);
 $median = $prices ? (int)$prices[(int)floor((count($prices) - 1) / 2)] : null;
 function page_link(int $page): string { $query = $_GET; $query['page'] = $page; return 'katalog.php?' . http_build_query($query); }
+function facebook_page_link(int $page): string { $query = $_GET; $query['fb_page'] = $page; return 'katalog.php?' . http_build_query($query) . '#facebook-offers'; }
 ?>
 <!doctype html>
 <html lang="pl">
@@ -77,6 +86,15 @@ function page_link(int $page): string { $query = $_GET; $query['page'] = $page; 
 <main class="shell">
   <header class="top"><div><p class="eyebrow">ŁOWCA KAMPERÓW · KATALOG</p><h1><?= $type ? h($type) : 'Wszystkie kampery' ?></h1><p>Porównaj ceny i parametry ofert w jednym miejscu.</p><p><a href="panel.php">← Panel główny IFS</a> · <a href="index.php">Łowca Kamperów</a></p></div></header>
   <div class="summary catalog-summary"><div><span>Oferty w katalogu</span><strong><?= (int)$overview['total'] ?></strong></div><div><span>Nowe / używane</span><strong><?= (int)$overview['fresh'] ?> / <?= (int)$overview['used'] ?></strong></div><div><span>Mediana cen z katalogu</span><strong><?= $median === null ? '—' : number_format($median, 0, ',', ' ') . ' zł' ?></strong></div></div>
+  <section class="card" id="facebook-offers">
+    <div class="section-head"><div><p class="eyebrow">GRUPY FACEBOOK</p><h2>Oferty z grup · <?= $facebookCount ?></h2></div><a href="facebook_groups.php">Zarządzaj grupami →</a></div>
+    <p class="hint">Tu pojawiają się zapisane posty z grup Facebooka. Cena i dostępność wymagają potwierdzenia w poście. Oferty bez danych o typie i stanie nie są uwzględniane w filtrach ani medianie katalogu.</p>
+    <?php if (!$facebookOffers): ?><p class="empty">Nie ma jeszcze zapisanych ofert z grup. Status skanowania sprawdzisz w panelu grup.</p><?php endif; ?>
+    <?php foreach ($facebookOffers as $offer): ?>
+      <article class="listing"><div class="listing-top"><div><span class="tag"><?= h($offer['source']) ?></span><h3><a href="<?= h($offer['url']) ?>" target="_blank" rel="noopener noreferrer"><?= h($offer['title']) ?></a></h3><p class="source"><?= $offer['price_text'] !== '' ? h($offer['price_text']) . ' · ' : 'Cena niepodana · ' ?>Wykryto <?= h($offer['first_seen']) ?> UTC</p></div><a class="small-button secondary" href="<?= h($offer['url']) ?>" target="_blank" rel="noopener noreferrer">Otwórz post ↗</a></div></article>
+    <?php endforeach; ?>
+    <?php if ($facebookPageCount > 1): ?><nav class="pagination" aria-label="Strony ofert z grup Facebook"><?php if ($facebookPage > 1): ?><a href="<?= h(facebook_page_link($facebookPage - 1)) ?>">← Poprzednia</a><?php endif; ?><span><?= $facebookPage ?> / <?= $facebookPageCount ?></span><?php if ($facebookPage < $facebookPageCount): ?><a href="<?= h(facebook_page_link($facebookPage + 1)) ?>">Następna →</a><?php endif; ?></nav><?php endif; ?>
+  </section>
   <nav class="catalog-types" aria-label="Typy kamperów"><a class="<?= $type === '' ? 'active' : '' ?>" href="katalog.php">Wszystkie <span><?= (int)$overview['total'] ?></span></a><?php foreach ($types as $item): ?><a class="<?= $type === $item['type'] ? 'active' : '' ?>" href="katalog.php?type=<?= rawurlencode($item['type']) ?>"><?= h($item['type']) ?> <span><?= (int)$item['total'] ?></span></a><?php endforeach; ?></nav>
   <section class="card">
     <div class="section-head"><div><p class="eyebrow">ZAWĘŹ WYNIKI</p><h2>Filtry ofert</h2></div><span class="muted"><?= $total ?> wyników</span></div>
