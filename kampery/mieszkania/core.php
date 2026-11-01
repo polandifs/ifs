@@ -54,9 +54,15 @@ function homes_requested_sources(): array {
     ];
 }
 
+function homes_valid_price($price): ?int {
+    if (!is_int($price) && !is_float($price) && !(is_string($price) && is_numeric($price))) return null;
+    $value = (float)$price;
+    return is_finite($value) && $value >= 1 && $value <= 100000000 ? (int)round($value) : null;
+}
+
 function homes_card_offer(string $url, string $source, string $title, ?int $price, ?float $area, ?int $rooms, string $street, string $image): array {
     return ['url' => $url, 'source' => $source, 'title' => mb_substr(trim($title), 0, 180),
-        'price' => $price, 'area' => $area, 'rooms' => $rooms, 'street' => mb_substr(trim($street), 0, 100),
+        'price' => homes_valid_price($price), 'area' => $area, 'rooms' => $rooms, 'street' => mb_substr(trim($street), 0, 100),
         'image_url' => filter_var($image, FILTER_VALIDATE_URL) && parse_url($image, PHP_URL_SCHEME) === 'https' ? mb_substr($image, 0, 2048) : ''];
 }
 
@@ -269,7 +275,7 @@ function homes_offers(string $html, string $source): array {
             if (is_array($image)) $image = $image['url'] ?? $image[0] ?? '';
             $image = is_string($image) && filter_var($image, FILTER_VALIDATE_URL) && parse_url($image, PHP_URL_SCHEME) === 'https' ? $image : '';
             $out[$url] = ['url' => $url, 'source' => $source, 'title' => mb_substr($title, 0, 180),
-                'price' => $price === false ? null : (int)round($price), 'area' => $area === false ? null : $area,
+                'price' => homes_valid_price($price), 'area' => $area === false ? null : $area,
                 'rooms' => $rooms === false ? null : $rooms, 'street' => mb_substr(trim((string)($address['streetAddress'] ?? '')), 0, 100), 'image_url' => mb_substr($image, 0, 2048)];
         }
     }
@@ -280,8 +286,9 @@ function homes_offers(string $html, string $source): array {
                 $url = $card['url'];
                 if (!isset($out[$url])) {
                     $out[$url] = $card;
-                } elseif ($card['image_url'] !== '') {
-                    $out[$url]['image_url'] = $card['image_url'];
+                } else {
+                    if ($out[$url]['price'] === null && $card['price'] !== null) $out[$url]['price'] = $card['price'];
+                    if ($card['image_url'] !== '') $out[$url]['image_url'] = $card['image_url'];
                 }
             }
         } catch (RuntimeException $e) {

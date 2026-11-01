@@ -36,6 +36,8 @@ foreach (homes_sources() as $source => $url) {
         $previous = (int)$db->query("SELECT COUNT(*) FROM scans WHERE source = " . $db->quote($source) . " AND error = ''")->fetchColumn();
         $db->beginTransaction();
         foreach ($offers as $offer) {
+            // Portal może chwilowo podać wartość zastępczą (np. PHP_INT_MAX) zamiast ceny.
+            $offer['price'] = homes_valid_price($offer['price']);
             $insert->execute($offer);
             if ($insert->rowCount()) {
                 $added++;
@@ -49,10 +51,10 @@ foreach (homes_sources() as $source => $url) {
             } else {
                 $oldOffer->execute([$offer['url']]);
                 $old = $oldOffer->fetch(PDO::FETCH_ASSOC);
-                $before = $old['price'] ?? null;
-                if ($before !== false && $before !== null && $offer['price'] !== null && (int)$before !== $offer['price']) {
-                    $history->execute([$offer['url'], (int)$before, $offer['price']]);
-                    if ($offer['price'] < (int)$before) $new[$offer['url']] = ['title' => 'Obniżka ceny: ' . $offer['title'], 'url' => $offer['url']];
+                $before = homes_valid_price($old['price'] ?? null);
+                if ($before !== null && $offer['price'] !== null && $before !== $offer['price']) {
+                    $history->execute([$offer['url'], $before, $offer['price']]);
+                    if ($offer['price'] < $before) $new[$offer['url']] = ['title' => 'Obniżka ceny: ' . $offer['title'], 'url' => $offer['url']];
                 } elseif ($before === null && $offer['price'] !== null) {
                     $event->execute([$offer['url'], 'price_added', '', (string)$offer['price']]);
                 }
