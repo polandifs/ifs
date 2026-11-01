@@ -107,13 +107,14 @@ function reference_candidates(string $csv): array
     $header = fgetcsv($stream, 0, ';');
     if (!is_array($header)) throw new RuntimeException('Nieprawidłowy plik CSV');
     $header = array_map(static function ($x) { return trim(str_replace("\xEF\xBB\xBF", '', $x)); }, $header);
-    $required = ['Stan', 'Typ', 'Marka', 'Model', 'Rok', 'Przebieg km', 'Cena zł brutto', 'Link do ogłoszenia'];
+    $required = ['Stan', 'Typ', 'Marka', 'Model', 'Rok', 'Przebieg km', 'Cena zł brutto', 'Pewność ceny', 'Link do ogłoszenia'];
     if (array_diff($required, $header)) throw new RuntimeException('Zmieniły się kolumny CSV');
     $rows = []; $groups = [];
     while (($values = fgetcsv($stream, 0, ';')) !== false) {
         if (count($values) !== count($header)) continue;
         $r = array_combine($header, $values);
         if (mb_strtolower(trim($r['Stan'])) !== 'używany') continue;
+        if (mb_strtolower(trim($r['Pewność ceny'])) !== 'potwierdzona') continue;
         $year = (int)$r['Rok'];
         $price = (int)preg_replace('/\D/', '', $r['Cena zł brutto']);
         if ($year < 1980 || $year > (int)date('Y') || $price < 30000 || $price > 300000) continue;
@@ -142,7 +143,7 @@ function reference_candidates(string $csv): array
         $title = clean_text($r['Marka'] . ' ' . $r['Model'] . ' (' . $r['Rok'] . ', ' . $r['Przebieg km'] . ' km)');
         $out[$url] = ['url' => $url, 'title' => mb_substr($title, 0, 180), 'country' => 'PL',
             'source' => 'WybierzKampera', 'price_text' => number_format($price, 0, ',', ' ') . ' zł',
-            'signal' => $discount . '% poniżej mediany typu i rocznika'];
+            'signal' => $discount . '% poniżej mediany typu, rocznika i przebiegu'];
     }
     uasort($out, static function ($a, $b) { return (int)$b['signal'] <=> (int)$a['signal']; });
     return array_slice(array_values($out), 0, 30);
