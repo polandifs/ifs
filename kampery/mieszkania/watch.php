@@ -36,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else { http_response_code(400); exit('Nieznana operacja.'); }
     header('Location: watch.php'); exit;
 }
-$watched = $db->query('SELECT h.*,w.saved_at,w.purchase_cost,w.renovation,w.reserve_cost,w.resale_target,w.note FROM watched w JOIN homes h ON h.url=w.url ORDER BY w.saved_at DESC,h.title ASC')->fetchAll(PDO::FETCH_ASSOC);
+$watched = $db->query("SELECT h.*,w.saved_at,w.purchase_cost,w.renovation,w.reserve_cost,w.resale_target,w.note FROM watched w JOIN homes h ON h.url=w.url ORDER BY CASE WHEN h.title LIKE 'Kwidzyn%' THEN 0 ELSE 1 END,w.saved_at DESC,h.title ASC")->fetchAll(PDO::FETCH_ASSOC);
 $candidates = $db->query("SELECT url,price,area,rooms,street FROM homes WHERE source<>'Adradar' AND price BETWEEN 50000 AND 2000000 AND area BETWEEN 15 AND 250 AND rooms BETWEEN 1 AND 8")->fetchAll(PDO::FETCH_ASSOC);
 $histQuery = $db->prepare('SELECT old_price,new_price,changed_at FROM price_history WHERE url=? ORDER BY id DESC LIMIT 8');
 function homes_money(int $value): string { return number_format($value, 0, ',', ' ') . ' zł'; }
