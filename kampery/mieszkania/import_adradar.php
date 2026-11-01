@@ -3,19 +3,27 @@ declare(strict_types=1);
 require dirname(__DIR__) . '/app.php';
 require __DIR__ . '/core.php';
 $config = config();
-session_name('kampery_session');
-session_set_cookie_params(['httponly' => true, 'secure' => true, 'samesite' => 'Lax']);
-session_start();
-header('Cache-Control: no-store');
-header('X-Content-Type-Options: nosniff');
-header('X-Frame-Options: DENY');
-if (empty($_SESSION['auth'])) { header('Location: ../index.php'); exit; }
+$cli = PHP_SAPI === 'cli';
+if ($cli) {
+    $archivePath = '/home/ifs/adradar-mieszkania-2026-11-01.json';
+    if (!is_file($archivePath)) { fwrite(STDERR, "Brak prywatnego archiwum Adradar.\n"); exit(1); }
+    $_SERVER['REQUEST_METHOD'] = 'POST';
+    $_FILES['archive'] = ['error' => UPLOAD_ERR_OK, 'size' => filesize($archivePath), 'tmp_name' => $archivePath];
+} else {
+    session_name('kampery_session');
+    session_set_cookie_params(['httponly' => true, 'secure' => true, 'samesite' => 'Lax']);
+    session_start();
+    header('Cache-Control: no-store');
+    header('X-Content-Type-Options: nosniff');
+    header('X-Frame-Options: DENY');
+    if (empty($_SESSION['auth'])) { header('Location: ../index.php'); exit; }
+}
 $db = homes_db();
 $result = '';
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
-        require_csrf($config);
+        if (!$cli) require_csrf($config);
         $file = $_FILES['archive'] ?? null;
         if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || (int)$file['size'] > 4_000_000) {
             throw new RuntimeException('Wybierz poprawny plik JSON o wielkości do 4 MB.');
@@ -69,6 +77,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($db->inTransaction()) $db->rollBack();
         $error = $e->getMessage();
     }
+}
+if ($cli) {
+    if ($error !== '') { fwrite(STDERR, $error . "\n"); exit(1); }
+    fwrite(STDOUT, $result . "\n");
+    exit;
 }
 ?>
 <!doctype html><html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Import Adradar · IFS</title><style>*{box-sizing:border-box}body{margin:0;background:#f4f7f6;color:#15312e;font:16px/1.5 system-ui,sans-serif}header{background:#123c38;color:white;padding:22px}header div,main{max-width:850px;margin:auto}header a{color:#d7eee9}main{padding:24px}.card{background:white;border:1px solid #dae5e1;border-radius:14px;padding:22px;margin:18px 0}input,button{font:inherit}input{display:block;margin:12px 0}button{background:#0c6958;color:white;border:0;border-radius:9px;padding:11px 17px;cursor:pointer}.ok{color:#13704b}.error{color:#a32626}a{color:#0b685a}</style></head><body><header><div><h1>Import historii Adradar</h1><a href="watch.php">← Obserwowane mieszkania</a></div></header><main><div class="card"><p>Import zapisuje mieszkania z eksportu w obserwowanych. Historia Adradar pozostaje oddzielona od zmian wykrytych przez monitor IFS. Ponowny import aktualizuje dane Adradar i zachowuje Twoje wyceny oraz notatki.</p><?php if ($result): ?><p class="ok"><b><?= homes_e($result) ?></b></p><p><a href="watch.php">Otwórz obserwowane →</a></p><?php endif ?><?php if ($error): ?><p class="error"><?= homes_e($error) ?></p><?php endif ?><form method="post" enctype="multipart/form-data"><input type="hidden" name="csrf" value="<?= homes_e(csrf_token($config)) ?>"><label>Plik JSON z eksportem mieszkań<input type="file" name="archive" accept=".json,application/json" required></label><button type="submit">Importuj do obserwowanych</button></form></div></main></body></html>
