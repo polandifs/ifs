@@ -90,6 +90,10 @@ function db(): PDO
         checked_at TEXT NOT NULL DEFAULT '',
         imported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )");
+    foreach (['catalog_offers' => ['reference_url', 'image_url'], 'discoveries' => ['image_url']] as $table => $wanted) {
+        $existing = array_column($db->query('PRAGMA table_info(' . $table . ')')->fetchAll(PDO::FETCH_ASSOC), 'name');
+        foreach ($wanted as $column) if (!in_array($column, $existing, true)) $db->exec('ALTER TABLE ' . $table . ' ADD COLUMN ' . $column . " TEXT NOT NULL DEFAULT ''");
+    }
     $db->exec('CREATE INDEX IF NOT EXISTS catalog_type_price ON catalog_offers(type, price_pln)');
     return $db;
 }
