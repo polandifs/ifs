@@ -30,7 +30,7 @@ foreach (homes_sources() as $source => $url) {
                 }
                 if ($previous > 0 && !$duplicate) $new[$offer['url']] = $offer;
             } else {
-                $update->execute($offer);
+                $update->execute(array_diff_key($offer, ['source' => true]));
             }
         }
         $db->commit();
