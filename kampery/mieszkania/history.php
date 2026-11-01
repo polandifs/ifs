@@ -55,6 +55,23 @@ foreach ($fieldChanges as $change) {
         'time' => $change['occurred_at'], 'kind' => $change['kind'], 'old' => $change['old_value'], 'new' => $change['new_value'], 'id' => $change['id']
     ];
 }
+$portalDates = [];
+foreach ($adradarLinks as $link) {
+    $added = trim((string)$link['added']);
+    if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/', $added, $parts)
+        || !checkdate((int)$parts[2], (int)$parts[3], (int)$parts[1])
+        || (int)$parts[4] > 23 || (int)$parts[5] > 59 || (isset($parts[6]) && (int)$parts[6] > 59)) continue;
+    $portalUrl = (string)$link['portal_url'];
+    $portal = (string)(parse_url($portalUrl, PHP_URL_HOST) ?: 'portal nieruchomości');
+    $key = $portalUrl . '|' . $added;
+    if (isset($portalDates[$key])) continue;
+    $portalDates[$key] = true;
+    $timeline[] = [
+        'time' => str_replace('T', ' ', $added), 'kind' => 'portal_added',
+        'portal' => $portal, 'portal_url' => $portalUrl, 'id' => (int)$link['row_number']
+    ];
+}
+$timeline[] = ['time' => (string)$home['first_seen'], 'kind' => 'first_seen', 'id' => 0];
 usort($timeline, static fn(array $a, array $b): int => strcmp($b['time'], $a['time']) ?: ($b['id'] <=> $a['id']));
 $initialPrice = $db->prepare('SELECT old_price FROM price_history WHERE url=? AND old_price BETWEEN 1 AND 100000000 ORDER BY id ASC LIMIT 1');
 $initialPrice->execute([$url]);
@@ -87,7 +104,6 @@ $labels = ['title' => 'Zmiana tytułu', 'area' => 'Zmiana metrażu', 'rooms' => 
 <?php else: ?><p>Do analizy potrzebny jest metraż mieszkania od 15 do 250 m². Wpisz go powyżej.</p><p><a href="wycena.php">Otwórz moduł wyceny →</a></p><?php endif ?></section>
 <section class="card"><h2>Monitoring IFS</h2><div class="facts"><div><span class="muted">Pierwszy zapis</span><b><?= homes_e($home['first_seen']) ?> UTC</b></div><div><span class="muted">Ostatnio wykryto</span><b><?= homes_e($home['last_seen']) ?> UTC</b></div><div><span class="muted">Wykryte zmiany ceny</span><b><?= count($priceChanges) ?></b></div></div><p class="muted">Historia dotyczy tego adresu ogłoszenia i danych dostępnych od pierwszego zapisu w IFS. „Ostatnio wykryto” oznacza obecność w wynikach skanowania, a nie potwierdzenie aktualności oferty. Ogłoszenia z różnych portali mogą dotyczyć tego samego mieszkania.</p></section>
 <?php if ($adradar): $adradarSummary = json_decode($adradar['summary_json'], true) ?: []; ?><section class="card"><h2>Historia z Adradar</h2><p class="muted">Import z <?= homes_e($adradar['imported_at']) ?> UTC. Dane archiwalne pochodzą z Adradar; dostępność i ceny sprawdź w portalu. Wiersze mogą obejmować kolejne aktualizacje tego samego ogłoszenia.</p><?php if ($adradar['status']): ?><p><b>Status przy imporcie:</b> <?= homes_e($adradar['status']) ?></p><?php endif ?><?php if ($adradar['description']): ?><p><?= nl2br(homes_e($adradar['description'])) ?></p><?php endif ?><?php if ($adradarSummary): ?><h3>Podsumowanie źródła</h3><ul><?php foreach ($adradarSummary as $point): ?><li><?= homes_e((string)$point) ?></li><?php endforeach ?></ul><?php endif ?><h3>Ogłoszenia i aktualizacje (<?= count($adradarLinks) ?>)</h3><div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:14px"><thead><tr><th>Cena</th><th>Oferent</th><th>Portal</th><th>Miasto</th><th>Ulica</th><th>Dodano</th><th>Zaktualizowano</th></tr></thead><tbody><?php foreach ($adradarLinks as $link): ?><tr><td><?= homes_e($link['price']) ?></td><td><?= homes_e($link['seller_type']) ?></td><td><?php if ($link['portal_url']): ?><a href="<?= homes_e($link['portal_url']) ?>" target="_blank" rel="noopener noreferrer"><?= homes_e((string)parse_url($link['portal_url'], PHP_URL_HOST)) ?></a><?php endif ?></td><td><?= homes_e($link['city']) ?></td><td><?= homes_e($link['street']) ?></td><td><?= homes_e($link['added']) ?></td><td><?= homes_e($link['updated']) ?></td></tr><?php endforeach ?></tbody></table></div></section><?php endif ?>
-<section class="card"><h2>Oś historii</h2><ol class="timeline">
-<?php foreach ($timeline as $entry): ?><li><time><?= homes_e($entry['time']) ?> UTC</time><b><?= $entry['kind'] === 'price' ? 'Zmiana ceny' : homes_e($labels[$entry['kind']] ?? 'Zmiana danych') ?></b><?php if ($entry['kind'] === 'price'): ?><div class="change"><?= history_money((int)$entry['old']) ?> → <?= history_money((int)$entry['new']) ?></div><?php elseif ($entry['kind'] === 'price_added'): ?><div class="change"><?= history_money((int)$entry['new']) ?></div><?php elseif ($entry['kind'] !== 'returned'): ?><div class="change"><?= $entry['old'] !== '' ? homes_e((string)$entry['old']) . ' → ' : '' ?><?= homes_e((string)$entry['new']) ?></div><?php endif ?></li><?php endforeach ?>
-<li><time><?= homes_e($home['first_seen']) ?> UTC</time><b>Pierwszy zapis w IFS</b><?php if ($firstPrice !== null): ?><div><?= history_money($firstPrice) ?></div><?php endif ?></li>
+<section class="card"><h2>Oś historii</h2><?php if ($portalDates): ?><p class="muted">Daty dodania do portali pochodzą z Adradar; źródło nie podaje strefy czasu. Zdarzenia monitoringu IFS są podane w UTC.</p><?php endif ?><ol class="timeline">
+<?php foreach ($timeline as $entry): ?><li><time><?= homes_e($entry['time']) ?><?= $entry['kind'] === 'portal_added' ? '' : ' UTC' ?></time><?php if ($entry['kind'] === 'portal_added'): ?><b>Dodano do portalu · <?= homes_e($entry['portal']) ?></b><?php if ($entry['portal_url'] !== ''): ?><a href="<?= homes_e($entry['portal_url']) ?>" target="_blank" rel="noopener noreferrer">Otwórz ogłoszenie ↗</a><?php endif ?><?php elseif ($entry['kind'] === 'first_seen'): ?><b>Pierwszy zapis w IFS</b><?php if ($firstPrice !== null): ?><div><?= history_money($firstPrice) ?></div><?php endif ?><?php else: ?><b><?= $entry['kind'] === 'price' ? 'Zmiana ceny' : homes_e($labels[$entry['kind']] ?? 'Zmiana danych') ?></b><?php if ($entry['kind'] === 'price'): ?><div class="change"><?= history_money((int)$entry['old']) ?> → <?= history_money((int)$entry['new']) ?></div><?php elseif ($entry['kind'] === 'price_added'): ?><div class="change"><?= history_money((int)$entry['new']) ?></div><?php elseif ($entry['kind'] !== 'returned'): ?><div class="change"><?= $entry['old'] !== '' ? homes_e((string)$entry['old']) . ' → ' : '' ?><?= homes_e((string)$entry['new']) ?></div><?php endif ?><?php endif ?></li><?php endforeach ?>
 </ol></section></main></body></html>
