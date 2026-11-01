@@ -20,6 +20,23 @@ function valuation_percentile(array $sorted, float $position): float {
     return (float)$sorted[$low] + ((float)$sorted[$high] - (float)$sorted[$low]) * ($index - $low);
 }
 
+function valuation_trim_outliers(array $rows): array {
+    $count = count($rows);
+    if ($count < 10) return [$rows, 0];
+    $values = array_map(static fn(array $row): float => (float)$row['price_m2'], $rows);
+    sort($values, SORT_NUMERIC);
+    $median = valuation_percentile($values, .5);
+    $q1 = valuation_percentile($values, .25);
+    $q3 = valuation_percentile($values, .75);
+    $iqr = $q3 - $q1;
+    // A transaction must be far outside the middle half and at least 25% from the median.
+    $lower = min($q1 - 1.5 * $iqr, $median * .75);
+    $upper = max($q3 + 1.5 * $iqr, $median * 1.25);
+    $kept = array_values(array_filter($rows, static fn(array $row): bool =>
+        (float)$row['price_m2'] >= $lower && (float)$row['price_m2'] <= $upper));
+    return [$kept, $count - count($kept)];
+}
+
 function valuation_geometry(PDO $db, string $street): array {
     static $memo = [];
     $name = valuation_street($street);
@@ -109,17 +126,18 @@ function valuation_comparables(PDO $db, float $area, string $street): array {
 }
 
 function valuation_summary(PDO $db, float $area, string $street = ''): array {
-    $empty = ['available'=>false,'count'=>0,'scope'=>'Podaj ulicę','reason'=>'missing_street','area'=>$area,'street'=>$street,'from'=>null,'to'=>null,'low'=>null,'median'=>null,'high'=>null,'lower_quartile'=>null,'upper_quartile'=>null,'price_m2'=>null,'synced_at'=>null];
+    $empty = ['available'=>false,'count'=>0,'raw_count'=>0,'excluded_count'=>0,'scope'=>'Podaj ulicę','reason'=>'missing_street','area'=>$area,'street'=>$street,'from'=>null,'to'=>null,'low'=>null,'median'=>null,'high'=>null,'lower_quartile'=>null,'upper_quartile'=>null,'price_m2'=>null,'synced_at'=>null];
     if ($area < 15 || $area > 250) return $empty;
     $comparison = valuation_comparables($db, $area, $street);
-    $selected = $comparison['rows'];
+    $empty['raw_count'] = count($comparison['rows']);
+    [$selected, $empty['excluded_count']] = valuation_trim_outliers($comparison['rows']);
     $empty['count'] = count($selected);
     $empty['scope'] = $comparison['scope'];
     $empty['reason'] = $comparison['reason'];
     if ($db->query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='rcn_meta'")->fetchColumn()) {
         $empty['synced_at'] = $db->query("SELECT value FROM rcn_meta WHERE key='synced_at'")->fetchColumn() ?: null;
     }
-    if (count($selected) < 5) return $empty;
+    if (count($selected) < 5) { $empty['reason'] = 'too_few'; return $empty; }
     $values = array_map(static fn(array $row): float => (float)$row['price_m2'], $selected);
     sort($values, SORT_NUMERIC);
     $dates = array_column($selected, 'sold_at');
