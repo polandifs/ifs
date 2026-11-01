@@ -44,6 +44,24 @@ function db(): PDO
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )");
+    $db->exec("CREATE TABLE IF NOT EXISTS discoveries (
+        url TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        country TEXT NOT NULL,
+        source TEXT NOT NULL,
+        price_text TEXT NOT NULL DEFAULT '',
+        signal TEXT NOT NULL DEFAULT '',
+        first_seen TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        last_seen TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )");
+    $db->exec("CREATE TABLE IF NOT EXISTS scan_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source TEXT NOT NULL,
+        scanned_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        found INTEGER NOT NULL DEFAULT 0,
+        added INTEGER NOT NULL DEFAULT 0,
+        error TEXT NOT NULL DEFAULT ''
+    )");
     return $db;
 }
 
