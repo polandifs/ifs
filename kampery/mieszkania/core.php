@@ -74,6 +74,24 @@ function homes_html_offers(string $html, string $source): array {
             $rooms = ctype_digit($parts[2]) ? (int)$parts[2] : null;
             $out[$url] = homes_card_offer($url, $source, $title, $price, $area, $rooms, '', $image ? $image->getAttribute('src') : '');
         }
+    } elseif ($source === 'OLX') {
+        foreach ($xpath->query('//*[@data-testid="l-card"]') as $card) {
+            $link = $xpath->query('.//a[@data-testid="card-title-link"]', $card)->item(0);
+            $location = $xpath->query('.//*[@data-testid="location-date"]', $card)->item(0);
+            if (!$link || !$location || !preg_match('/^Kwidzyn\s*-/u', trim($location->textContent))) continue;
+            $url = $link->getAttribute('href');
+            if (parse_url($url, PHP_URL_HOST) !== 'www.olx.pl' || strpos($url, '/d/oferta/') === false) continue;
+            $title = trim($link->textContent);
+            $priceNode = $xpath->query('.//*[@data-testid="ad-price"]', $card)->item(0);
+            $priceDigits = $priceNode ? preg_replace('/\D+/', '', preg_replace('/\s*do negocjacji.*/iu', '', $priceNode->textContent)) : '';
+            $areaNode = $xpath->query('.//*[@data-testid="blueprint-card-param-icon"]/..', $card)->item(0);
+            $area = $areaNode && preg_match('/(\d+(?:[,.]\d+)?)\s*m[²2]/u', $areaNode->textContent, $m)
+                ? (float)str_replace(',', '.', $m[1]) : null;
+            $rooms = preg_match('/(\d+)\s*(?:-|\s*)\s*(?:pok|poko)/iu', $title, $m) ? (int)$m[1] : null;
+            $image = $xpath->query('.//img[@src]', $card)->item(0);
+            $out[$url] = homes_card_offer($url, $source, $title, ctype_digit($priceDigits) ? (int)$priceDigits : null,
+                $area, $rooms, '', $image ? $image->getAttribute('src') : '');
+        }
     } elseif ($source === 'GetHome') {
         foreach ($xpath->query('//*[@data-testid="offer-box"]') as $card) {
             $link = $xpath->query('.//a[@data-testid="offer-box-link"]', $card)->item(0);
