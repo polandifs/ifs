@@ -144,6 +144,7 @@ function valuation_summary(PDO $db, float $area, string $street = ''): array {
     $money = static fn(float $priceM2): int => (int)(round($priceM2 * $area / 1000) * 1000);
     return array_merge($empty, [
         'available'=>true,
+        'chart_rows'=>array_map(static fn(array $row): array => ['sold_at'=>$row['sold_at'], 'price_m2'=>(float)$row['price_m2']], $selected),
         'from'=>min($dates), 'to'=>max($dates),
         'low'=>$money(valuation_percentile($values, 0.2)),
         'median'=>$money(valuation_percentile($values, 0.5)),
@@ -179,6 +180,7 @@ function valuation_city_summary(PDO $db, float $area): array {
     $dates = array_column($rows, 'sold_at');
     $money = static fn(float $priceM2): int => (int)(round($priceM2 * $area / 1000) * 1000);
     return array_merge($empty, ['available'=>true, 'reason'=>'',
+        'chart_rows'=>array_map(static fn(array $row): array => ['sold_at'=>$row['sold_at'], 'price_m2'=>(float)$row['price_m2']], $rows),
         'low'=>$money(valuation_percentile($values, .2)),
         'median'=>$money(valuation_percentile($values, .5)),
         'high'=>$money(valuation_percentile($values, .8)),
