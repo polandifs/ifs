@@ -41,3 +41,9 @@ Wycena porównuje transakcje z rynku wtórnego z ostatnich 24 miesięcy, o powie
 ## Prywatne archiwum alertów PDF
 
 `mieszkania/import_email_pdfs.py` tworzy lokalną bazę SQLite z PDF-ów alertów „Mieszkania Kwidzyn”. Przykład: `python3 mieszkania/import_email_pdfs.py '/Users/piotr/Downloads/wycena ' data/adradar_email_history.sqlite`. Baza zapisuje datę maila, cenę ofertową, metraż, pokoje, ulicę, zmianę ceny i identyfikator grupy Adradar. Tabela `email_offer_events` zachowuje alerty, a widok `email_price_history` układa je według ogłoszenia i daty. Pole `quality` oznacza brak ulicy, brak ceny lub typ lokalu do ręcznej kontroli. Nie są importowane maile z innych kategorii ani linki do wypisania się. Historyczne ceny ofertowe nie są cenami transakcyjnymi i nie wchodzą do bieżącej automatycznej wyceny.
+
+### Wykres RCN na karcie oferty
+
+Karta history.php pokazuje transakcje użyte w istniejącej analizie: cenę oferty za m², medianę RCN i pas kwartylowy 25–75%. Pokazuje liczbę transakcji, daty sprzedaży, lokalizację i datę pobrania. Bez lokalnej próby oznacza porównanie dla całego Kwidzyna. Poniżej 5 transakcji pokazuje komunikat. Nie zmienia rankingu ani propozycji negocjacji. Używa istniejącej bazy RCN.
+
+Aktualizacja: wgraj razem history.php, valuation_core.php, rcn_chart.php i rcn_chart.css do istniejącego katalogu ifskampery/mieszkania/. Zachowaj kopię poprzednich plików. Nie zastępuj konfiguracji ani baz. Test: php tests/rcn_chart_test.php (tworzy podgląd z oznaczonymi danymi testowymi poza repozytorium).
